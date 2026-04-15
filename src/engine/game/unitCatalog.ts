@@ -43,6 +43,8 @@ const UNIT_CATALOG: Record<UnitType, UnitBlueprint> = {
     maxHp: 1,
     attackDamage: 1,
     attackRange: 1,
+    allyDamageBonusRadius: 10,
+    allyDamageBonusPerUnit: 0.1,
     placementFootprint: GOBLIN_PLACEMENT_FOOTPRINT,
     spawnOffsets: GOBLIN_SPAWN_OFFSETS,
     attackCooldownMs: 700,

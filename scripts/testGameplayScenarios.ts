@@ -214,4 +214,53 @@ runTest('ranged units hold position when already in diagonal range but waiting o
   );
 });
 
+runTest('goblin squad gains 10% damage per nearby allied goblin within radius 10', () => {
+  const initial = createInitialGameState();
+  const goblinA = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'GOBLIN', x: 4, y: 10 }),
+    attackCooldownMs: 0,
+  };
+  const goblinB = {
+    ...createUnit({ id: 2, team: 'PLAYER', type: 'GOBLIN', x: 6, y: 10 }),
+    attackCooldownMs: 0,
+  };
+  const knightNear = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'KNIGHT', x: 4, y: 9 }),
+    hp: 1.1,
+    maxHp: 16,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const knightFar = {
+    ...createUnit({ id: 4, team: 'ENEMY', type: 'KNIGHT', x: 20, y: 20 }),
+    hp: 1.1,
+    maxHp: 16,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const buffedResult = stepBattle({
+    grid: initial.grid,
+    units: [goblinA, goblinB, knightNear],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const unbuffedResult = stepBattle({
+    grid: initial.grid,
+    units: [goblinA, knightFar],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  assertOk(
+    !buffedResult.units.some(unit => unit.id === knightNear.id),
+    'Buffed goblin should deal 1.1 damage and defeat a 1.1 HP target when another goblin is nearby.'
+  );
+  assertOk(
+    unbuffedResult.units.some(unit => unit.id === knightFar.id),
+    'Single goblin should still deal base damage and fail to defeat a 1.1 HP target without nearby allies.'
+  );
+});
+
 console.log('[done] gameplay regression scenarios passed');

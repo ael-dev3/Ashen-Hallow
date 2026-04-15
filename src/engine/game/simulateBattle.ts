@@ -50,6 +50,21 @@ const chebyshev = (a: { x: number; y: number }, b: { x: number; y: number }): nu
 
 const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
 
+const getUnitAttackDamage = (unit: UnitState, allies: readonly UnitState[]): number => {
+  const blueprint = getUnitBlueprint(unit.type);
+  const baseDamage = getUnitStats(unit.type, unit.tier).attackDamage;
+  const bonusRadius = blueprint.allyDamageBonusRadius ?? 0;
+  const bonusPerUnit = blueprint.allyDamageBonusPerUnit ?? 0;
+  if (bonusRadius <= 0 || bonusPerUnit <= 0) return baseDamage;
+
+  const unitCenter = getUnitCenter(unit);
+  const nearbyAllies = allies.filter(
+    ally => ally.id !== unit.id && ally.type === unit.type && chebyshev(unitCenter, getUnitCenter(ally)) <= bonusRadius
+  ).length;
+
+  return baseDamage * (1 + nearbyAllies * bonusPerUnit);
+};
+
 const getBuildingEngagementPoint = (
   unitCenter: { x: number; y: number },
   building: BuildingState
@@ -239,7 +254,12 @@ export const stepBattle = (params: {
   const moves: MoveIntent[] = [];
   const buildingsThatAttacked = new Set<number>();
 
-  const considerUnit = (unit: UnitState, enemies: readonly UnitState[], enemyBuildings: readonly BuildingState[]): void => {
+  const considerUnit = (
+    unit: UnitState,
+    allies: readonly UnitState[],
+    enemies: readonly UnitState[],
+    enemyBuildings: readonly BuildingState[]
+  ): void => {
     if (unit.inactiveMsRemaining > 0) return;
     const target = pickNearestTarget(unit, enemies, enemyBuildings);
     if (!target) return;
@@ -253,13 +273,14 @@ export const stepBattle = (params: {
     const canAttack = inRange && unit.attackCooldownMs === 0;
 
     if (canAttack) {
+      const attackDamage = getUnitAttackDamage(unit, allies);
       if (target.kind === 'BUILDING') {
         attacks.push({
           attackerId: unit.id,
           attackerKind: 'UNIT',
           defenderId: target.id,
           defenderKind: 'BUILDING',
-          damage: getUnitStats(unit.type, unit.tier).attackDamage,
+          damage: attackDamage,
         });
       } else {
         const aoeRadius = blueprint.aoeRadius ?? 0;
@@ -271,7 +292,7 @@ export const stepBattle = (params: {
               attackerKind: 'UNIT',
               defenderId: enemy.id,
               defenderKind: 'UNIT',
-              damage: getUnitStats(unit.type, unit.tier).attackDamage,
+              damage: attackDamage,
             });
           }
         } else {
@@ -280,7 +301,7 @@ export const stepBattle = (params: {
             attackerKind: 'UNIT',
             defenderId: target.id,
             defenderKind: 'UNIT',
-            damage: getUnitStats(unit.type, unit.tier).attackDamage,
+            damage: attackDamage,
           });
         }
       }
@@ -340,9 +361,10 @@ export const stepBattle = (params: {
   };
 
   for (const unit of alive) {
+    const allies = unit.team === 'PLAYER' ? playerUnits : enemyUnits;
     const enemies = unit.team === 'PLAYER' ? enemyUnits : playerUnits;
     const buildings = unit.team === 'PLAYER' ? enemyBuildings : playerBuildings;
-    considerUnit(unit, enemies, buildings);
+    considerUnit(unit, allies, enemies, buildings);
   }
 
   for (const building of aliveBuildings) {

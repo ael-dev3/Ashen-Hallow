@@ -33,6 +33,8 @@ export interface UnitBlueprint {
   attackRange: number;
   attackDistance?: 'MANHATTAN' | 'CHEBYSHEV';
   aoeRadius?: number;
+  allyDamageBonusRadius?: number;
+  allyDamageBonusPerUnit?: number;
   footprint?: { width: number; height: number };
   placementFootprint?: { width: number; height: number };
   spawnOffsets?: CellCoord[];
