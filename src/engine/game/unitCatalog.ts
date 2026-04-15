@@ -33,7 +33,7 @@ const UNIT_CATALOG: Record<UnitType, UnitBlueprint> = {
     attackCooldownMs: 1050,
     moveCooldownMs: 280,
     moveSpeed: MS_PER_SECOND / 280,
-    color: '#ff4d6d',
+    color: '#d7c3c3',
   },
   GOBLIN: {
     type: 'GOBLIN',
@@ -52,6 +52,22 @@ const UNIT_CATALOG: Record<UnitType, UnitBlueprint> = {
     moveSpeed: MS_PER_SECOND / 93,
     color: '#7ac77a',
   },
+  BLOOD_GOBLIN: {
+    type: 'BLOOD_GOBLIN',
+    name: 'Blood Goblin',
+    unlockCost: 0,
+    placementCost: 0,
+    maxHp: 1,
+    attackDamage: 1,
+    attackRange: 1,
+    summonOnly: true,
+    allyDamageBonusRadius: 10,
+    allyDamageBonusPerUnit: 0.1,
+    attackCooldownMs: 700,
+    moveCooldownMs: 93,
+    moveSpeed: MS_PER_SECOND / 93,
+    color: '#9f2235',
+  },
   ARCHER: {
     type: 'ARCHER',
     name: 'Archer',
@@ -64,7 +80,7 @@ const UNIT_CATALOG: Record<UnitType, UnitBlueprint> = {
     attackCooldownMs: 750,
     moveCooldownMs: 320,
     moveSpeed: MS_PER_SECOND / 320,
-    color: '#ffb703',
+    color: '#e0c17e',
   },
   SNIPER: {
     type: 'SNIPER',
@@ -77,7 +93,7 @@ const UNIT_CATALOG: Record<UnitType, UnitBlueprint> = {
     attackCooldownMs: 375,
     moveCooldownMs: 1000,
     moveSpeed: 1,
-    color: '#5dade2',
+    color: '#9fb2c9',
   },
   MAGE: {
     type: 'MAGE',
@@ -91,7 +107,22 @@ const UNIT_CATALOG: Record<UnitType, UnitBlueprint> = {
     attackCooldownMs: 1100,
     moveCooldownMs: 360,
     moveSpeed: MS_PER_SECOND / 360,
-    color: '#c77dff',
+    color: '#8b7bd8',
+  },
+  BLOOD_MAGE: {
+    type: 'BLOOD_MAGE',
+    name: 'Blood Mage',
+    unlockCost: 3,
+    placementCost: 3,
+    maxHp: 7,
+    attackDamage: 1.5,
+    attackRange: 20,
+    attacksAllUnitsInRange: true,
+    spawnsOnDeathsInRange: true,
+    attackCooldownMs: 1650,
+    moveCooldownMs: 360,
+    moveSpeed: MS_PER_SECOND / 360,
+    color: '#8f1d2c',
   },
   GOLEM: {
     type: 'GOLEM',
@@ -106,7 +137,7 @@ const UNIT_CATALOG: Record<UnitType, UnitBlueprint> = {
     attackCooldownMs: 1050,
     moveCooldownMs: 280,
     moveSpeed: MS_PER_SECOND / 280,
-    color: '#8d8d8d',
+    color: '#7c7272',
   },
 };
 
@@ -184,12 +215,17 @@ export const getCounterUnitType = (unitType: UnitType): UnitType => {
       return 'MAGE';
     case 'MAGE':
       return 'KNIGHT';
+    case 'BLOOD_MAGE':
+      return 'KNIGHT';
     case 'GOLEM':
       return 'MAGE';
     case 'GOBLIN':
+    case 'BLOOD_GOBLIN':
       return 'ARCHER';
   }
 };
+
+export const isGoblinPackUnitType = (unitType: UnitType): boolean => unitType === 'GOBLIN' || unitType === 'BLOOD_GOBLIN';
 
 export const getUnitStats = (unitType: UnitType, tier: number): { maxHp: number; attackDamage: number } => {
   const blueprint = getUnitBlueprint(unitType);

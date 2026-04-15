@@ -2,13 +2,8 @@ import type { GameAction } from '../game/actions';
 import type { CellCoord, GameState, UnitType } from '../game/types';
 import { isEnemyFlankCell, isPlayerDeployableCell, isPlayerFlankCell } from '../game/grid';
 import { GAME_CONFIG } from '../config/gameConfig';
-import {
-  getAllUnitTypes,
-  getCounterUnitType,
-  getPlacementFootprint,
-  getUnitBlueprint,
-  isCellInUnitFootprint,
-} from '../game/unitCatalog';
+import { getCounterUnitType, getPlacementFootprint, getUnitBlueprint, isCellInUnitFootprint } from '../game/unitCatalog';
+import { getRaceUnitTypes } from '../game/races';
 import { isCellInBuildingFootprint } from '../game/buildingCatalog';
 import type { Store } from '../state/Store';
 
@@ -159,7 +154,18 @@ const getOpenPlayerCellCount = (state: GameState, cells: CellCoord[]): number =>
 };
 
 const canAffordAny = (state: GameState): boolean =>
-  getAllUnitTypes().some(unitType => incrementalCost(state, unitType) <= state.gold);
+  getRaceUnitTypes(state.playerRace).some(unitType => incrementalCost(state, unitType) <= state.gold);
+
+const createUnitCountRecord = (): Record<UnitType, number> => ({
+  KNIGHT: 0,
+  GOBLIN: 0,
+  BLOOD_GOBLIN: 0,
+  ARCHER: 0,
+  SNIPER: 0,
+  MAGE: 0,
+  BLOOD_MAGE: 0,
+  GOLEM: 0,
+});
 
 const pickWeightedType = (weights: Record<UnitType, number>, choices: UnitType[], rand: () => number): UnitType => {
   let total = 0;
@@ -174,38 +180,28 @@ const pickWeightedType = (weights: Record<UnitType, number>, choices: UnitType[]
 
 const buildWeights = (state: GameState, rand: () => number): Record<UnitType, number> => {
   const weights: Record<UnitType, number> = {
+    ...createUnitCountRecord(),
     KNIGHT: 1,
     GOBLIN: 1,
+    BLOOD_GOBLIN: 0,
     ARCHER: 1,
     SNIPER: 1,
     MAGE: 1,
+    BLOOD_MAGE: 1,
     GOLEM: 1,
   };
   const goblinMageCounterWeight = 0.12;
 
-  const enemyCounts: Record<UnitType, number> = {
-    KNIGHT: 0,
-    GOBLIN: 0,
-    ARCHER: 0,
-    SNIPER: 0,
-    MAGE: 0,
-    GOLEM: 0,
-  };
+  const enemyCounts: Record<UnitType, number> = createUnitCountRecord();
   for (const deployment of state.enemyDeployments) enemyCounts[deployment.type] += 1;
 
-  const playerCounts: Record<UnitType, number> = {
-    KNIGHT: 0,
-    GOBLIN: 0,
-    ARCHER: 0,
-    SNIPER: 0,
-    MAGE: 0,
-    GOLEM: 0,
-  };
+  const playerCounts: Record<UnitType, number> = createUnitCountRecord();
   for (const deployment of state.deployments) playerCounts[deployment.type] += 1;
 
-  let mostCommon: UnitType = 'KNIGHT';
+  const rosterTypes = getRaceUnitTypes(state.playerRace);
+  let mostCommon: UnitType = rosterTypes[0] ?? 'KNIGHT';
   let mostCommonCount = -1;
-  for (const unitType of getAllUnitTypes()) {
+  for (const unitType of getRaceUnitTypes(state.playerRace)) {
     const count = enemyCounts[unitType];
     if (count > mostCommonCount) {
       mostCommon = unitType;
@@ -220,7 +216,7 @@ const buildWeights = (state: GameState, rand: () => number): Record<UnitType, nu
     }
   }
 
-  for (const unitType of getAllUnitTypes()) {
+  for (const unitType of getRaceUnitTypes(state.playerRace)) {
     if (playerCounts[unitType] > 0) {
       weights[unitType] = Math.max(0.4, weights[unitType] - playerCounts[unitType] * 0.2);
     }
@@ -242,7 +238,7 @@ const buildWeights = (state: GameState, rand: () => number): Record<UnitType, nu
     weights.MAGE += 0.6;
   }
 
-  for (const unitType of getAllUnitTypes()) {
+  for (const unitType of getRaceUnitTypes(state.playerRace)) {
     weights[unitType] += rand() * 0.45;
   }
   return weights;
@@ -259,7 +255,7 @@ export const autoPrepPlayer = (
   if ((initial.phase !== 'DEPLOYMENT' && initial.phase !== 'INTERMISSION') || initial.matchResult) return;
 
   const openCellCount = getOpenPlayerCellCount(initial, cells);
-  const minCostAtStart = getAllUnitTypes().reduce(
+  const minCostAtStart = getRaceUnitTypes(initial.playerRace).reduce(
     (min, unitType) => Math.min(min, incrementalCost(initial, unitType)),
     Number.POSITIVE_INFINITY
   );
@@ -277,7 +273,7 @@ export const autoPrepPlayer = (
     if (placementsBudget <= 0) return;
 
     const placementsLeft = state.placementSlots - state.placementsUsedThisTurn;
-    const minCost = getAllUnitTypes().reduce(
+    const minCost = getRaceUnitTypes(state.playerRace).reduce(
       (min, unitType) => Math.min(min, incrementalCost(state, unitType)),
       Number.POSITIVE_INFINITY
     );
@@ -308,7 +304,7 @@ export const autoPrepPlayer = (
 
     if (!canAffordAny(state)) return;
 
-    const affordable = getAllUnitTypes().filter(unitType => incrementalCost(state, unitType) <= state.gold);
+    const affordable = getRaceUnitTypes(state.playerRace).filter(unitType => incrementalCost(state, unitType) <= state.gold);
     if (affordable.length === 0) return;
     const weights = buildWeights(state, rand);
     const unitType = pickWeightedType(weights, affordable, rand);

@@ -1,4 +1,5 @@
 import type { Screen } from './Screen';
+import type { Race } from '../../engine/game/types';
 import { GameScreen } from './screens/GameScreen';
 import { MainMenu } from './screens/MainMenu';
 import { ShowcaseScreen } from './screens/ShowcaseScreen';
@@ -25,15 +26,16 @@ export class App {
   private showMenu(): void {
     this.setScreen(
       new MainMenu({
-        onStart: () => this.showGame(),
+        onStartRace: race => this.showGame(race),
         onShowcase: () => this.showShowcase(),
       })
     );
   }
 
-  private showGame(): void {
+  private showGame(race: Race): void {
     this.setScreen(
       new GameScreen({
+        race,
         onExit: () => this.showMenu(),
       })
     );

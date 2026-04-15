@@ -1,34 +1,36 @@
 :root {
   /* Typography */
-  --font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter,
-    Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-family: "Cinzel", "Trajan Pro", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   --font-size-sm: 14px;
   --font-size-md: 16px;
   --font-size-lg: 20px;
   --font-size-xl: 28px;
 
   /* Colors */
-  --color-bg: #0f1115;
-  --color-surface: #171a21;
-  --color-surface-2: #1f2430;
-  --color-text: #e9edf1;
-  --color-muted: #a9b3c1;
-  --color-border: rgba(255, 255, 255, 0.12);
+  --color-bg: #090608;
+  --color-surface: #130c10;
+  --color-surface-2: #1c1116;
+  --color-surface-3: #26171d;
+  --color-text: #f2e7de;
+  --color-muted: #bda99e;
+  --color-border: rgba(196, 150, 138, 0.18);
 
-  --color-primary: #8a2be2;
-  --color-primary-hover: #9b53ea;
-  --color-secondary: #4b0082;
-  --color-danger: #dc143c;
+  --color-primary: #8f1d2c;
+  --color-primary-hover: #b0273a;
+  --color-secondary: #5a1019;
+  --color-accent: #d8bf95;
+  --color-danger: #d13b43;
 
-  --color-grid-line: rgba(255, 255, 255, 0.12);
-  --color-zone-player: rgba(46, 204, 113, 0.10);
-  --color-zone-neutral: rgba(241, 196, 15, 0.08);
-  --color-zone-enemy: rgba(231, 76, 60, 0.10);
+  --color-grid-line: rgba(214, 190, 172, 0.12);
+  --color-zone-player: rgba(154, 121, 92, 0.12);
+  --color-zone-neutral: rgba(216, 191, 149, 0.08);
+  --color-zone-enemy: rgba(143, 29, 44, 0.12);
 
   /* Layout */
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --shadow-md: 0 18px 48px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 0 1px rgba(216, 191, 149, 0.08), 0 20px 50px rgba(0, 0, 0, 0.42);
 
   /* Spacing */
   --space-1: 8px;

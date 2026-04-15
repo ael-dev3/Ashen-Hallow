@@ -38,6 +38,7 @@ import {
   isCellInUnitFootprint,
 } from './unitCatalog';
 import { addXp, xpRequiredForTier, toRoman } from './xp';
+import { isBuildingAvailableForRace, isUnitAvailableForRace } from './races';
 
 const goldForTurn = (turn: number): number => Math.max(2, turn);
 
@@ -351,6 +352,7 @@ const skipBattleWithoutUnits = (state: GameState): GameState => {
     enemyUnlockedUnits: state.enemyUnlockedUnits,
     enemyPlacementSlots: state.enemyPlacementSlots,
     enemyNextPlacementSlotCost: state.enemyNextPlacementSlotCost,
+    enemyRace: state.enemyRace,
   });
 
   const nextState = {
@@ -404,6 +406,7 @@ const startBattleFromCurrentDeployments = (state: GameState): GameState => {
     enemyUnlockedUnits: state.enemyUnlockedUnits,
     enemyPlacementSlots: state.enemyPlacementSlots,
     enemyNextPlacementSlotCost: state.enemyNextPlacementSlotCost,
+    enemyRace: state.enemyRace,
   });
 
   const buildings = prepareBuildingsForBattle(state.buildings);
@@ -620,6 +623,9 @@ const endBattle = (state: GameState, params: { units: readonly UnitState[]; batt
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
     case 'SELECT_UNIT': {
+      if (!isUnitAvailableForRace(state.playerRace, action.unitType)) {
+        return { ...state, message: { kind: 'error', text: `${action.unitType} is not available for the ${state.playerRace} race.` } };
+      }
       const alreadyUnlocked = state.unlockedUnits[action.unitType];
       if (alreadyUnlocked) {
         return { ...state, selectedUnitType: action.unitType, selectedPlacementKind: 'UNIT', message: null };
@@ -647,6 +653,9 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       };
     }
     case 'SELECT_BUILDING': {
+      if (!isBuildingAvailableForRace(state.playerRace, action.buildingType)) {
+        return { ...state, message: { kind: 'error', text: `${action.buildingType} is not available for the ${state.playerRace} race.` } };
+      }
       const alreadyUnlocked = state.unlockedBuildings[action.buildingType];
       if (alreadyUnlocked) {
         return { ...state, selectedBuildingType: action.buildingType, selectedPlacementKind: 'BUILDING', message: null };

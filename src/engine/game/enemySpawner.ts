@@ -1,7 +1,6 @@
 import type { BuildingState, DeploymentUnit, GridState, UnitState, UnitType } from './types';
 import {
   createUnit,
-  getAllUnitTypes,
   getCounterUnitType,
   getPlacementFootprint,
   getPlacementOffsets,
@@ -12,12 +11,24 @@ import { getBuildingFootprint } from './buildingCatalog';
 import { isEnemyDeployableCell, isPlayerFlankCell } from './grid';
 import { GAME_CONFIG } from '../config/gameConfig';
 import { addXp, xpRequiredForTier } from './xp';
+import { getRaceUnitTypes } from './races';
 
 interface EnemyPlacement {
   type: UnitType;
   anchor: { x: number; y: number };
   deploymentIds: number[];
 }
+
+const createUnitCountRecord = (): Record<UnitType, number> => ({
+  KNIGHT: 0,
+  GOBLIN: 0,
+  BLOOD_GOBLIN: 0,
+  ARCHER: 0,
+  SNIPER: 0,
+  MAGE: 0,
+  BLOOD_MAGE: 0,
+  GOLEM: 0,
+});
 
 export const spawnEnemyUnits = (params: {
   grid: GridState;
@@ -32,6 +43,7 @@ export const spawnEnemyUnits = (params: {
   enemyUnlockedUnits: Record<UnitType, boolean>;
   enemyPlacementSlots: number;
   enemyNextPlacementSlotCost: number;
+  enemyRace: 'HUMAN' | 'ORC';
 }): {
   enemyUnits: UnitState[];
   enemyDeployments: DeploymentUnit[];
@@ -77,7 +89,7 @@ export const spawnEnemyUnits = (params: {
     }
   };
 
-  const allTypes = getAllUnitTypes();
+  const allTypes = getRaceUnitTypes(params.enemyRace);
 
   const placementCost = (unitType: UnitType): number => getUnitBlueprint(unitType).placementCost;
   const unlockCost = (unitType: UnitType): number => getUnitBlueprint(unitType).unlockCost;
@@ -85,24 +97,10 @@ export const spawnEnemyUnits = (params: {
     placementCost(unitType) + (unlockedUnits[unitType] ? 0 : unlockCost(unitType));
   const minIncrementalCost = allTypes.reduce((min, type) => Math.min(min, incrementalCost(type)), Number.POSITIVE_INFINITY);
 
-  const playerCounts: Record<UnitType, number> = {
-    KNIGHT: 0,
-    GOBLIN: 0,
-    ARCHER: 0,
-    SNIPER: 0,
-    MAGE: 0,
-    GOLEM: 0,
-  };
+  const playerCounts: Record<UnitType, number> = createUnitCountRecord();
   for (const unit of params.playerUnits) playerCounts[unit.type] += 1;
 
-  const enemyCounts: Record<UnitType, number> = {
-    KNIGHT: 0,
-    GOBLIN: 0,
-    ARCHER: 0,
-    SNIPER: 0,
-    MAGE: 0,
-    GOLEM: 0,
-  };
+  const enemyCounts: Record<UnitType, number> = createUnitCountRecord();
   for (const deployment of enemyDeployments) enemyCounts[deployment.type] += 1;
 
   const occupied = new Set<string>();
@@ -245,16 +243,19 @@ export const spawnEnemyUnits = (params: {
   applyEnemyUpgrades();
 
   const weights: Record<UnitType, number> = {
+    ...createUnitCountRecord(),
     KNIGHT: 1,
     GOBLIN: 1,
+    BLOOD_GOBLIN: 0,
     ARCHER: 1,
     SNIPER: 1,
     MAGE: 1,
+    BLOOD_MAGE: 1,
     GOLEM: 1,
   };
   const goblinMageCounterWeight = 0.12;
 
-  let mostCommon: UnitType = 'KNIGHT';
+  let mostCommon: UnitType = allTypes[0] ?? 'KNIGHT';
   let mostCommonCount = -1;
   for (const type of allTypes) {
     const count = playerCounts[type];
@@ -315,9 +316,9 @@ export const spawnEnemyUnits = (params: {
     if (anchors.length === 0) return null;
     shuffleInPlace(anchors);
     const preferences: Array<'front' | 'mid' | 'back'> =
-      type === 'KNIGHT' || type === 'GOLEM' || type === 'GOBLIN'
+      type === 'KNIGHT' || type === 'GOLEM' || type === 'GOBLIN' || type === 'BLOOD_GOBLIN'
         ? ['front', 'mid', 'back']
-        : type === 'ARCHER'
+        : type === 'ARCHER' || type === 'BLOOD_MAGE'
           ? ['mid', 'back', 'front']
           : ['back', 'mid', 'front'];
     for (const band of preferences) {
@@ -347,14 +348,7 @@ export const spawnEnemyUnits = (params: {
   };
 
   const buildCountsByType = (deployments: readonly DeploymentUnit[]): Record<UnitType, number> => {
-    const counts: Record<UnitType, number> = {
-      KNIGHT: 0,
-      GOBLIN: 0,
-      ARCHER: 0,
-      SNIPER: 0,
-      MAGE: 0,
-      GOLEM: 0,
-    };
+    const counts: Record<UnitType, number> = createUnitCountRecord();
     for (const deployment of deployments) counts[deployment.type] += 1;
     return counts;
   };

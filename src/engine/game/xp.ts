@@ -3,18 +3,22 @@ import type { UnitType } from './types';
 export const XP_REWARD: Record<UnitType, number> = {
   KNIGHT: 1,
   GOBLIN: 1,
+  BLOOD_GOBLIN: 1,
   ARCHER: 2,
   SNIPER: 5,
   MAGE: 3,
+  BLOOD_MAGE: 3,
   GOLEM: 4,
 };
 
 export const XP_BASE_REQUIREMENT: Record<UnitType, number> = {
   KNIGHT: 1,
   GOBLIN: 1,
+  BLOOD_GOBLIN: 1,
   ARCHER: 2,
   SNIPER: 5,
   MAGE: 3,
+  BLOOD_MAGE: 3,
   GOLEM: 4,
 };
 

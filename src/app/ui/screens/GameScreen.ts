@@ -1,10 +1,10 @@
 import { GAME_CONFIG } from '../../../engine/config/gameConfig';
 import type { GameAction } from '../../../engine/game/actions';
-import type { BuildingType, GameState, RoundUnitSummary, UnitType, CellCoord } from '../../../engine/game/types';
+import type { BuildingType, GameState, RoundUnitSummary, UnitType, CellCoord, Race } from '../../../engine/game/types';
 import { createInitialGameState } from '../../../engine/game/initialState';
 import { gameReducer } from '../../../engine/game/reducer';
+import { getRaceBuildingTypes, getRaceUnitTypes } from '../../../engine/game/races';
 import {
-  getAllUnitTypes,
   getPlacementFootprint,
   getPlacementOffsets,
   getUnitBlueprint,
@@ -13,7 +13,6 @@ import {
   getUnitStats,
 } from '../../../engine/game/unitCatalog';
 import {
-  getAllBuildingTypes,
   getBuildingAttackStats,
   getBuildingBlueprint,
   getBuildingFootprint,
@@ -32,6 +31,7 @@ import { getBuildingAt, getCellZone, getUnitAt, isEnemyFlankCell, isPlayerFlankC
 import { playSfx, setMatchActive } from '../audio';
 
 export interface GameScreenOptions {
+  race: Race;
   onExit: () => void;
 }
 
@@ -243,7 +243,7 @@ export class GameScreen implements Screen {
     const title = document.createElement('h2');
     title.textContent = 'Ashen-Hallow';
     const subtitle = document.createElement('p');
-    subtitle.textContent = 'Autobattle command map';
+    subtitle.textContent = `${options.race === 'HUMAN' ? 'Human' : 'Orc'} warhost enters Ashen Hallow.`;
     titleWrap.appendChild(title);
     titleWrap.appendChild(subtitle);
 
@@ -302,7 +302,7 @@ export class GameScreen implements Screen {
     const unitRow = document.createElement('div');
     unitRow.className = 'game__unit-grid';
 
-    for (const unitType of getAllUnitTypes()) {
+    for (const unitType of getRaceUnitTypes(options.race)) {
       const blueprint = getUnitBlueprint(unitType);
       const aoeText = blueprint.aoeRadius ? `, AOE ${blueprint.aoeRadius}` : '';
       const footprint = getPlacementFootprint(unitType);
@@ -429,7 +429,7 @@ export class GameScreen implements Screen {
     const buildingRow = document.createElement('div');
     buildingRow.className = 'game__building-grid';
 
-    for (const buildingType of getAllBuildingTypes()) {
+    for (const buildingType of getRaceBuildingTypes(options.race)) {
       const blueprint = getBuildingBlueprint(buildingType);
       const maxCount = blueprint.maxCount ?? 1;
       const buildingItem = document.createElement('div');
@@ -613,7 +613,7 @@ export class GameScreen implements Screen {
     this.roundResultOverlay.appendChild(roundResultCard);
     this.container.appendChild(this.roundResultOverlay);
 
-    this.store = new Store<GameState, GameAction>(createInitialGameState(), gameReducer);
+    this.store = new Store<GameState, GameAction>(createInitialGameState(options.race), gameReducer);
     this.matchAudioActive = true;
     setMatchActive(true);
     const debugUi = this.createDebugUi();

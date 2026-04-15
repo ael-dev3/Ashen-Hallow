@@ -1,11 +1,12 @@
 import type { Screen } from '../Screen';
+import type { Race } from '../../../engine/game/types';
 import { Button } from '../atoms/Button';
 import { Tooltip } from '../atoms/Tooltip';
 import { CURRENT_VERSION } from '../../../engine/config/versionCatalog';
 import { getSoundEnabled, toggleSound } from '../audio';
 
 export interface MainMenuOptions {
-  onStart: () => void;
+  onStartRace: (race: Race) => void;
   onShowcase: () => void;
 }
 
@@ -28,17 +29,23 @@ export class MainMenu implements Screen {
 
     const subtitle = document.createElement('p');
     subtitle.className = 'menu__subtitle';
-    subtitle.textContent = 'Fantasy autobattler rebuilt for a cleaner, production-ready release.';
+    subtitle.textContent = 'Choose a race, command your warhost, and survive the haunted battlefield.';
 
-    const start = new Button({
-      text: `Start v${CURRENT_VERSION}`,
+    const humanStart = new Button({
+      text: `Play Humans v${CURRENT_VERSION}`,
       variant: 'primary',
-      className: 'btn--start',
-      onClick: options.onStart,
+      className: 'btn--start btn--start-human',
+      onClick: () => options.onStartRace('HUMAN'),
+    });
+    const orcStart = new Button({
+      text: `Play Orcs v${CURRENT_VERSION}`,
+      variant: 'secondary',
+      className: 'btn--start btn--start-orc',
+      onClick: () => options.onStartRace('ORC'),
     });
     const showcase = new Button({
       text: 'Mobile AI Showcase',
-      variant: 'secondary',
+      variant: 'ghost',
       className: 'btn--showcase',
       onClick: options.onShowcase,
     });
@@ -70,7 +77,8 @@ export class MainMenu implements Screen {
 
     const actions = document.createElement('div');
     actions.className = 'menu__actions';
-    actions.appendChild(start.getElement());
+    actions.appendChild(humanStart.getElement());
+    actions.appendChild(orcStart.getElement());
     actions.appendChild(showcase.getElement());
 
     menu.appendChild(title);

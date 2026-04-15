@@ -1,8 +1,11 @@
 .card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+  background:
+    linear-gradient(180deg, rgba(38, 23, 29, 0.96), rgba(19, 12, 16, 0.96)),
+    linear-gradient(135deg, rgba(216, 191, 149, 0.06), transparent 40%);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-glow);
+  backdrop-filter: blur(10px);
 }
 
 .btn {
@@ -36,30 +39,32 @@
 
 .btn:hover:not(:disabled):not(.btn--aria-disabled) {
   transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.22);
+  border-color: rgba(216, 191, 149, 0.34);
 }
 
 .btn--primary {
-  background: linear-gradient(180deg, rgba(138, 43, 226, 0.95), rgba(138, 43, 226, 0.65));
-  border-color: rgba(138, 43, 226, 0.75);
+  background: linear-gradient(180deg, rgba(155, 31, 49, 0.98), rgba(92, 16, 25, 0.94));
+  border-color: rgba(216, 191, 149, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 208, 0.12), 0 12px 28px rgba(82, 11, 18, 0.35);
 }
 
 .btn--primary:hover:not(:disabled) {
-  filter: brightness(1.06);
+  filter: brightness(1.08);
 }
 
 .btn--secondary {
-  background: linear-gradient(180deg, rgba(75, 0, 130, 0.9), rgba(75, 0, 130, 0.55));
-  border-color: rgba(75, 0, 130, 0.7);
+  background: linear-gradient(180deg, rgba(84, 16, 24, 0.96), rgba(49, 11, 16, 0.94));
+  border-color: rgba(196, 150, 138, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 208, 0.08), 0 10px 24px rgba(32, 8, 12, 0.32);
 }
 
 .btn--danger {
-  background: linear-gradient(180deg, rgba(220, 20, 60, 0.9), rgba(220, 20, 60, 0.6));
-  border-color: rgba(220, 20, 60, 0.7);
+  background: linear-gradient(180deg, rgba(209, 59, 67, 0.96), rgba(111, 19, 29, 0.92));
+  border-color: rgba(223, 132, 118, 0.34);
 }
 
 .btn--ghost {
-  background: rgba(255, 255, 255, 0.03);
+  background: linear-gradient(180deg, rgba(255, 244, 229, 0.035), rgba(255, 244, 229, 0.015));
 }
 
 .btn--active {
@@ -77,21 +82,21 @@
 }
 
 .btn--locked {
-  border-color: rgba(255, 255, 255, 0.10);
-  color: rgba(233, 237, 241, 0.70);
-  background: rgba(255, 255, 255, 0.02);
-  filter: grayscale(0.35) saturate(0.85);
-  opacity: 0.85;
+  border-color: rgba(196, 150, 138, 0.10);
+  color: rgba(242, 231, 222, 0.58);
+  background: linear-gradient(180deg, rgba(255, 244, 229, 0.018), rgba(255, 244, 229, 0.008));
+  filter: grayscale(0.28) saturate(0.85);
+  opacity: 0.82;
 }
 
 .btn--ghost.btn--unlocked {
-  border-color: rgba(255, 215, 0, 0.45);
-  background: linear-gradient(180deg, rgba(255, 215, 0, 0.14), rgba(255, 215, 0, 0.08));
-  color: rgba(255, 246, 214, 0.96);
+  border-color: rgba(216, 191, 149, 0.45);
+  background: linear-gradient(180deg, rgba(216, 191, 149, 0.16), rgba(143, 29, 44, 0.12));
+  color: rgba(250, 233, 202, 0.98);
 }
 
 .btn:focus-visible {
-  outline: 2px solid rgba(138, 43, 226, 0.75);
+  outline: 2px solid rgba(216, 191, 149, 0.75);
   outline-offset: 2px;
 }
 

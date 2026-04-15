@@ -102,13 +102,16 @@ runTest('enemy mirror avoidance replaces a whole placement instead of spawning a
     enemyUnlockedUnits: {
       KNIGHT: true,
       GOBLIN: true,
+      BLOOD_GOBLIN: false,
       ARCHER: false,
       SNIPER: false,
       MAGE: false,
+      BLOOD_MAGE: false,
       GOLEM: false,
     },
     enemyPlacementSlots: 1,
     enemyNextPlacementSlotCost: 2,
+    enemyRace: 'ORC',
   });
 
   const goblinDeployments = result.enemyDeployments.filter(deployment => deployment.type === 'GOBLIN');
@@ -130,13 +133,16 @@ runTest('enemy AI can take a loan to create an opening deployment', () => {
     enemyUnlockedUnits: {
       KNIGHT: false,
       GOBLIN: false,
+      BLOOD_GOBLIN: false,
       ARCHER: false,
       SNIPER: false,
       MAGE: false,
+      BLOOD_MAGE: false,
       GOLEM: false,
     },
     enemyPlacementSlots: 1,
     enemyNextPlacementSlotCost: 2,
+    enemyRace: 'HUMAN',
   });
 
   assertOk(result.enemyDeployments.length > 0, 'Enemy loan should enable at least one opening placement.');
@@ -261,6 +267,65 @@ runTest('goblin squad gains 10% damage per nearby allied goblin within radius 10
     unbuffedResult.units.some(unit => unit.id === knightFar.id),
     'Single goblin should still deal base damage and fail to defeat a 1.1 HP target without nearby allies.'
   );
+});
+
+runTest('race selection limits the player roster for humans and orcs', () => {
+  const humanState = createInitialGameState('HUMAN', 'ORC');
+  assertEqual(humanState.selectedUnitType, 'KNIGHT', 'Human games should default to Knight selection.');
+  assertEqual(humanState.selectedBuildingType, 'GOLD_MINE', 'Human games should default to Gold Mine selection.');
+
+  const humanGoblinUnlockAttempt = gameReducer(humanState, { type: 'SELECT_UNIT', unitType: 'GOBLIN' });
+  assertEqual(humanGoblinUnlockAttempt.gold, humanState.gold, 'Humans should not spend gold on Orc-only units.');
+  assertOk(!humanGoblinUnlockAttempt.unlockedUnits.GOBLIN, 'Humans should not be able to unlock Goblin Squad.');
+
+  const orcState = createInitialGameState('ORC', 'HUMAN');
+  assertEqual(orcState.selectedUnitType, 'GOBLIN', 'Orc games should default to Goblin Squad selection.');
+  assertEqual(orcState.selectedBuildingType, 'GOLD_MINE', 'Orc games should default to Gold Mine selection.');
+
+  const orcTowerUnlockAttempt = gameReducer(orcState, { type: 'SELECT_BUILDING', buildingType: 'ARCHER_TOWER' });
+  assertEqual(orcTowerUnlockAttempt.gold, orcState.gold, 'Orcs should not spend gold on Human-only buildings.');
+  assertOk(!orcTowerUnlockAttempt.unlockedBuildings.ARCHER_TOWER, 'Orcs should not be able to unlock Archer Tower.');
+});
+
+runTest('blood mage attacks all units in range and spawns blood goblins from nearby deaths', () => {
+  const initial = createInitialGameState('ORC', 'HUMAN');
+  const bloodMage = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'BLOOD_MAGE', x: 10, y: 10 }),
+    attackCooldownMs: 0,
+  };
+  const alliedGoblin = {
+    ...createUnit({ id: 2, team: 'PLAYER', type: 'GOBLIN', x: 12, y: 10 }),
+    hp: 1.5,
+    maxHp: 1.5,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyKnight = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'KNIGHT', x: 11, y: 10 }),
+    hp: 1.5,
+    maxHp: 16,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [bloodMage, alliedGoblin, enemyKnight],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  assertOk(
+    !result.units.some(unit => unit.id === alliedGoblin.id),
+    'Blood Mage should damage allied units in range too.'
+  );
+  assertOk(
+    !result.units.some(unit => unit.id === enemyKnight.id),
+    'Blood Mage should damage enemy units in range too.'
+  );
+
+  const spawnedBloodGoblins = result.units.filter(unit => unit.type === 'BLOOD_GOBLIN');
+  assertEqual(spawnedBloodGoblins.length, 2, 'Blood Mage should spawn one Blood Goblin per nearby non-blood-goblin death in range.');
 });
 
 console.log('[done] gameplay regression scenarios passed');

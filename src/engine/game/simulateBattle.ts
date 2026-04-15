@@ -1,11 +1,13 @@
 import type { BuildingState, GridState, Team, UnitState } from './types';
 import {
+  createUnit,
   getUnitBlueprint,
   getUnitCenter,
   getUnitFootprint,
   getUnitFootprintCells,
   getUnitMoveCooldownMs,
   getUnitStats,
+  isGoblinPackUnitType,
 } from './unitCatalog';
 import { getBuildingAttackStats, getBuildingCenter, getBuildingFootprint, getBuildingStats } from './buildingCatalog';
 import { addXp, XP_REWARD } from './xp';
@@ -58,11 +60,21 @@ const getUnitAttackDamage = (unit: UnitState, allies: readonly UnitState[]): num
   if (bonusRadius <= 0 || bonusPerUnit <= 0) return baseDamage;
 
   const unitCenter = getUnitCenter(unit);
-  const nearbyAllies = allies.filter(
-    ally => ally.id !== unit.id && ally.type === unit.type && chebyshev(unitCenter, getUnitCenter(ally)) <= bonusRadius
-  ).length;
+  const nearbyAllies = allies.filter(ally => {
+    if (ally.id === unit.id) return false;
+    const samePack = isGoblinPackUnitType(unit.type) && isGoblinPackUnitType(ally.type);
+    return (samePack || ally.type === unit.type) && chebyshev(unitCenter, getUnitCenter(ally)) <= bonusRadius;
+  }).length;
 
   return baseDamage * (1 + nearbyAllies * bonusPerUnit);
+};
+
+const isUnitWithinAttackRange = (attacker: UnitState, target: UnitState): boolean => {
+  const blueprint = getUnitBlueprint(attacker.type);
+  const attackerCenter = getUnitCenter(attacker);
+  const targetCenter = getUnitCenter(target);
+  const dist = blueprint.attackDistance === 'CHEBYSHEV' ? chebyshev(attackerCenter, targetCenter) : manhattan(attackerCenter, targetCenter);
+  return dist <= blueprint.attackRange;
 };
 
 const getBuildingEngagementPoint = (
@@ -274,7 +286,19 @@ export const stepBattle = (params: {
 
     if (canAttack) {
       const attackDamage = getUnitAttackDamage(unit, allies);
-      if (target.kind === 'BUILDING') {
+      if (blueprint.attacksAllUnitsInRange) {
+        for (const otherUnit of alive) {
+          if (otherUnit.id === unit.id) continue;
+          if (!isUnitWithinAttackRange(unit, otherUnit)) continue;
+          attacks.push({
+            attackerId: unit.id,
+            attackerKind: 'UNIT',
+            defenderId: otherUnit.id,
+            defenderKind: 'UNIT',
+            damage: attackDamage,
+          });
+        }
+      } else if (target.kind === 'BUILDING') {
         attacks.push({
           attackerId: unit.id,
           attackerKind: 'UNIT',
@@ -447,6 +471,11 @@ export const stepBattle = (params: {
     })
     .filter(u => u.hp > 0);
 
+  const deadUnits = alive.filter(unit => !afterAttacks.some(survivor => survivor.id === unit.id));
+  const bloodMages = afterAttacks.filter(unit => getUnitBlueprint(unit.type).spawnsOnDeathsInRange);
+  let nextSpawnId = alive.reduce((maxId, unit) => Math.max(maxId, unit.id), 0) + 1;
+  const spawnedBloodGoblins: UnitState[] = [];
+
   const occupiedAfterAttacks = new Map<string, string>();
   for (const unit of afterAttacks) {
     const footprint = getUnitFootprint(unit.type);
@@ -464,8 +493,30 @@ export const stepBattle = (params: {
       }
     }
   }
-  const aliveIdsAfterAttacks = new Set<number>(afterAttacks.map(u => u.id));
-  const afterAttacksById = new Map<number, UnitState>(afterAttacks.map(u => [u.id, u]));
+
+  for (const bloodMage of bloodMages) {
+    for (const deadUnit of deadUnits) {
+      if (deadUnit.type === 'BLOOD_GOBLIN') continue;
+      if (!isUnitWithinAttackRange(bloodMage, deadUnit)) continue;
+      const spawnCellKey = keyOf(deadUnit.x, deadUnit.y);
+      if (occupiedAfterAttacks.has(spawnCellKey)) continue;
+      const spawn = createUnit({
+        id: nextSpawnId++,
+        team: bloodMage.team,
+        type: 'BLOOD_GOBLIN',
+        x: deadUnit.x,
+        y: deadUnit.y,
+        xp: 0,
+        tier: deadUnit.tier,
+      });
+      spawnedBloodGoblins.push(spawn);
+      occupiedAfterAttacks.set(spawnCellKey, `unit:${spawn.id}`);
+    }
+  }
+
+  const unitsAfterSpawns = [...afterAttacks, ...spawnedBloodGoblins];
+  const aliveIdsAfterAttacks = new Set<number>(unitsAfterSpawns.map(u => u.id));
+  const afterAttacksById = new Map<number, UnitState>(unitsAfterSpawns.map(u => [u.id, u]));
 
   const winners = new Map<number, MoveIntent>();
   const takenTargets = new Set<string>();
@@ -482,7 +533,7 @@ export const stepBattle = (params: {
     winners.set(move.unitId, move);
   }
 
-  const movedUnits = afterAttacks.map(u => {
+  const movedUnits = unitsAfterSpawns.map(u => {
     const winner = winners.get(u.id);
     if (!winner) return u;
     return {

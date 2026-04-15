@@ -16,9 +16,12 @@ body {
   color: var(--color-text);
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
-  background: radial-gradient(1200px 700px at 50% -200px, rgba(138, 43, 226, 0.25), transparent 60%),
-    radial-gradient(900px 600px at 110% 10%, rgba(75, 0, 130, 0.25), transparent 55%),
-    var(--color-bg);
+  background:
+    radial-gradient(1100px 700px at 50% -10%, rgba(143, 29, 44, 0.28), transparent 58%),
+    radial-gradient(900px 540px at 100% 0%, rgba(216, 191, 149, 0.08), transparent 55%),
+    radial-gradient(1000px 700px at 20% 100%, rgba(88, 15, 24, 0.34), transparent 60%),
+    linear-gradient(180deg, rgba(16, 10, 12, 0.96), rgba(8, 6, 8, 1));
+  background-attachment: fixed;
 }
 
 #app {
