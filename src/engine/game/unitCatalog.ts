@@ -45,9 +45,9 @@ const UNIT_CATALOG: Record<UnitType, UnitBlueprint> = {
     attackRange: 1,
     placementFootprint: GOBLIN_PLACEMENT_FOOTPRINT,
     spawnOffsets: GOBLIN_SPAWN_OFFSETS,
-    attackCooldownMs: 1050,
-    moveCooldownMs: 140,
-    moveSpeed: MS_PER_SECOND / 140,
+    attackCooldownMs: 700,
+    moveCooldownMs: 93,
+    moveSpeed: MS_PER_SECOND / 93,
     color: '#7ac77a',
   },
   ARCHER: {
