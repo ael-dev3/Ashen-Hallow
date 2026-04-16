@@ -1,29 +1,39 @@
 # Ashen-Hallow
 
-Ashen-Hallow is a production-focused fantasy autobattler rebuilt from the Mechabellum prototype into a darker crimson war-game experience with race selection, modular TypeScript systems, mobile-friendly play, and static web deployment.
+Ashen-Hallow is a browser-based fantasy autobattler built in TypeScript and designed for GitHub Pages deployment. Inspired by early Mechabellum-style prototype gameplay, it has been rebuilt into a more focused standalone strategy game with a darker sacred-horror identity, cleaner UI, modular systems, and mobile-friendly play.
 
-Current release target: `v0.0.02`
+**Live game:** https://ael-dev3.github.io/Ashen-Hallow/  
+**Current version:** `v0.0.02`
 
-## Live site
+## Overview
 
-GitHub Pages: https://ael-dev3.github.io/Ashen-Hallow/
+In Ashen-Hallow, players prepare a warhost on a grid, invest gold into new units and structures, and then watch rounds resolve through automatic combat. Placements persist across rounds, so every unlock, upgrade, and positioning choice shapes the long-term flow of the match.
 
-## Core features
+The game is structured around fast strategic decisions:
+- choose a race at match start
+- unlock units and buildings over time
+- expand your battlefield presence across multiple rounds
+- counter the opposing army’s composition
+- scale through upgrades, synergies, and economic choices
 
-- grid-based deployment and autobattle loop
-- persistent placements between rounds
-- unit unlocks, XP, upgrades, and race-restricted rosters
-- building placement and upgrades
-- AI enemy deployment logic with race choice
-- audio controls, music, and battle SFX
-- mobile-friendly layout for touch screens and portrait play
-- GitHub Pages deployment
+## Core Gameplay
 
-## Races
+Ashen-Hallow combines several layers of autobattler strategy:
+- **grid-based deployment** for pre-battle positioning
+- **persistent armies** that carry between rounds
+- **gold-based progression** for unlocks, placements, and economy
+- **unit XP and upgrades** that reward surviving and performing units
+- **building support** for income and battlefield pressure
+- **AI opposition** with race-based rosters and automated deployment logic
 
-At the start of a match, the player chooses a race. The AI also chooses a race for its army.
+The goal is to create an army that snowballs efficiently while adapting to the enemy’s composition and momentum.
+
+## Factions
+
+Every match begins with a faction choice. The player selects a race, and the AI fields its own race-based army.
 
 ### Humans
+Humans focus on disciplined ranged pressure and classic fantasy frontline control.
 
 **Units**
 - Knight
@@ -36,35 +46,34 @@ At the start of a match, the player chooses a race. The AI also chooses a race f
 - Archer Tower
 
 ### Orcs
+Orcs focus on swarm pressure, brutal board presence, death triggers, and chaotic momentum.
 
 **Units**
 - Goblin Squad
 - Golem
 - Blood Mage
-- Blood Goblin (summoned by Blood Mage)
+- Hobgoblin
 
 **Buildings**
 - Gold Mine
 - Goblin Cave
 
-### Blood Mage
+## Visual Direction
 
-The Orc Blood Mage costs `3g` to unlock and `3g` to place.
+Ashen-Hallow is being developed around a distinct crimson, blood-lit, sacred-horror atmosphere rather than a generic web-app aesthetic. The project aims for a stronger “game” presentation through:
+- darker, moodier battlefield surfaces
+- crimson-led faction accents
+- cleaner, more intentional UI framing
+- reduced reliance on generic gradient-heavy styling
+- a haunted fantasy tone that feels more ritualistic and warlike
 
-- half the damage of a normal Mage
-- double the Mage attack range
-- 50% slower attack speed than a normal Mage
-- attacks all units within range instead of using AOE
-- spawns a Blood Goblin at the position of each non-Blood-Goblin unit that dies within its range
+## Technical Highlights
 
-Blood Goblins inherit Goblin-style melee swarm behavior and buff alongside regular Goblins as part of the same pack.
-
-## Tech
-
-- TypeScript
-- Vite
-- Modular game source
-- GitHub Actions + GitHub Pages
+- **TypeScript-first architecture**
+- **modular gameplay systems** for engine, app, and presentation layers
+- **Vite-based web build**
+- **GitHub Actions + GitHub Pages** deployment pipeline
+- **mobile-friendly layout** designed for touch and portrait-friendly play
 
 ## Development
 
@@ -73,13 +82,19 @@ npm install
 npm run dev
 ```
 
-## Production build
+## Build
 
 ```bash
 npm run build
 ```
 
-## Notes
+## Test
 
-- The original prototype remains untouched at https://github.com/ael-dev3/Mechabellum-prototype
-- Ashen-Hallow now diverges from the prototype with race-based faction design, Blood Mage mechanics, and a darker sacred-horror visual direction.
+```bash
+npm test
+```
+
+## Project Notes
+
+- The original prototype remains untouched: https://github.com/ael-dev3/Mechabellum-prototype
+- Ashen-Hallow is the standalone rebuild and now diverges through race-based faction design, modular TypeScript systems, improved presentation, and new faction mechanics.
