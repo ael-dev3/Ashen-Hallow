@@ -84,7 +84,11 @@ export interface UnitState {
   tier: number;
   roundHpBonusPct: number;
   roundDamageBonusPct: number;
+  roundKillBlows: number;
   bloodMageSpawnsCreated: number;
+  mageBlinkUsed: boolean;
+  isMirrorImage: boolean;
+  statMultiplier: number;
 }
 
 export interface BuildingState {

@@ -982,7 +982,11 @@ export class GameScreen implements Screen {
     const moveSpeedText = moveSpeed.toFixed(2);
 
     let mechanicText = '';
-    if (unitType === 'BLOOD_MAGE') {
+    if (unitType === 'ARCHER') {
+      mechanicText = ' Gains +1% round ATK per killing blow, and each kill lets this Archer hit 1 additional enemy in range for the rest of the round.';
+    } else if (unitType === 'MAGE') {
+      mechanicText = ' On the first hit it receives each round, it blinks 5 tiles backward and creates 4 mirror images with 10% of its stats.';
+    } else if (unitType === 'BLOOD_MAGE') {
       mechanicText = ' Hits every unit in range, and each non-Blood-Goblin death in range spawns 1 Blood Goblin per Blood Mage in range at the nearest open tile.';
     } else if (unitType === 'GOLEM') {
       mechanicText = ' On death, it bursts into a full Goblin Squad around its death location.';

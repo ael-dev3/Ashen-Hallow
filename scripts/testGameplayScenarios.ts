@@ -587,6 +587,101 @@ runTest('human units gain 1% round damage per killing blow', () => {
   assertEqual(buffedArcher?.roundDamageBonusPct ?? 0, 0.01, 'A human unit should gain 1% round damage per killing blow.');
 });
 
+runTest('archer gains one additional in-range target per kill for the rest of the round', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const archer = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'ARCHER', x: 10, y: 10 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+  const firstDoomedGoblin = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'GOBLIN', x: 10, y: 12 }),
+    hp: 1,
+    maxHp: 1,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const firstStep = stepBattle({
+    grid: initial.grid,
+    units: [archer, firstDoomedGoblin],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const buffedArcher = firstStep.units.find(unit => unit.id === archer.id);
+  assertOk(!!buffedArcher, 'The archer should survive the first setup.');
+
+  const secondDoomedGoblin = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'GOBLIN', x: 9, y: 12 }),
+    hp: 1,
+    maxHp: 1,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const thirdDoomedGoblin = {
+    ...createUnit({ id: 4, team: 'ENEMY', type: 'GOBLIN', x: 11, y: 12 }),
+    hp: 1,
+    maxHp: 1,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const secondStep = stepBattle({
+    grid: initial.grid,
+    units: [buffedArcher!, secondDoomedGoblin, thirdDoomedGoblin],
+    buildings: [],
+    deltaMs: 750,
+  });
+
+  const survivingTargets = secondStep.units.filter(unit => unit.team === 'ENEMY');
+  assertEqual(
+    survivingTargets.length,
+    0,
+    'After one kill this round, the archer should hit two in-range enemy units with its next attack.'
+  );
+});
+
+runTest('mage blinks backward on first hit and creates four 10% mirror images', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const mage = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'MAGE', x: 10, y: 10, tier: 3, xp: 5 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyArcher = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'ARCHER', x: 10, y: 13 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [mage, enemyArcher],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const survivingMages = result.units.filter(unit => unit.type === 'MAGE' && unit.team === 'PLAYER');
+  assertEqual(survivingMages.length, 5, 'The original mage should survive and create four mirror images.');
+
+  const blinkingMage = survivingMages.find(unit => unit.id === mage.id);
+  assertOk(!!blinkingMage, 'The original mage should still exist after blinking.');
+  assertEqual(blinkingMage?.x ?? -1, 10, 'The blink should preserve the mage lane when space is open.');
+  assertEqual(blinkingMage?.y ?? -1, 5, 'The mage should blink five cells backward away from the attacker.');
+
+  const mirrorImages = survivingMages.filter(unit => unit.id !== mage.id);
+  assertEqual(mirrorImages.length, 4, 'Exactly four mirror images should spawn.');
+  assertOk(
+    mirrorImages.every(unit => unit.tier === 3 && unit.xp === 5),
+    'Mirror images should inherit the mage tier and XP.'
+  );
+  assertOk(
+    mirrorImages.every(unit => unit.maxHp === 2.1 && unit.hp === 2.1),
+    'Mirror images should inherit 10% of the mage stats.'
+  );
+});
+
 runTest('golem death spawns a goblin squad around its death location', () => {
   const initial = createInitialGameState('ORC', 'HUMAN');
   const doomedGolem = {

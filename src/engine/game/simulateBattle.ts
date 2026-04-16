@@ -56,7 +56,7 @@ const clamp = (value: number, min: number, max: number): number => Math.min(Math
 
 const getUnitAttackDamage = (unit: UnitState, allies: readonly UnitState[]): number => {
   const blueprint = getUnitBlueprint(unit.type);
-  const baseDamage = getUnitStats(unit.type, unit.tier).attackDamage;
+  const baseDamage = getUnitStats(unit.type, unit.tier).attackDamage * (unit.statMultiplier ?? 1);
   const bonusRadius = blueprint.allyDamageBonusRadius ?? 0;
   const bonusPerUnit = blueprint.allyDamageBonusPerUnit ?? 0;
   if (bonusRadius <= 0 || bonusPerUnit <= 0) return baseDamage;
@@ -91,7 +91,7 @@ const getUnitMaxHpMultiplier = (unit: UnitState, allies: readonly UnitState[]): 
 const applyUnitHpBonuses = (units: readonly UnitState[]): UnitState[] => {
   return units.map(unit => {
     const allies = units.filter(other => other.team === unit.team);
-    const baseMaxHp = getUnitStats(unit.type, unit.tier).maxHp;
+    const baseMaxHp = getUnitStats(unit.type, unit.tier).maxHp * (unit.statMultiplier ?? 1);
     const targetMaxHp = baseMaxHp * getUnitMaxHpMultiplier(unit, allies);
     const hpDelta = targetMaxHp - unit.maxHp;
     return {
@@ -174,6 +174,23 @@ const pickNearestTarget = (
   }
 
   return best;
+};
+
+const getUnitTargetsInAttackRange = (unit: UnitState, enemies: readonly UnitState[]): UnitState[] => {
+  const blueprint = getUnitBlueprint(unit.type);
+  const unitCenter = getUnitCenter(unit);
+  return [...enemies]
+    .filter(enemy => {
+      const targetCenter = getUnitCenter(enemy);
+      const dist =
+        blueprint.attackDistance === 'CHEBYSHEV' ? chebyshev(unitCenter, targetCenter) : manhattan(unitCenter, targetCenter);
+      return dist <= blueprint.attackRange;
+    })
+    .sort((a, b) => {
+      const distA = manhattan(unitCenter, getUnitCenter(a));
+      const distB = manhattan(unitCenter, getUnitCenter(b));
+      return distA - distB || a.id - b.id;
+    });
 };
 
 const canOccupyAnchor = (
@@ -307,7 +324,11 @@ export const stepBattle = (params: {
       inactiveMsRemaining: Math.max(0, u.inactiveMsRemaining - params.deltaMs),
       roundHpBonusPct: u.roundHpBonusPct ?? 0,
       roundDamageBonusPct: u.roundDamageBonusPct ?? 0,
+      roundKillBlows: u.roundKillBlows ?? 0,
       bloodMageSpawnsCreated: u.bloodMageSpawnsCreated ?? 0,
+      mageBlinkUsed: u.mageBlinkUsed ?? false,
+      isMirrorImage: u.isMirrorImage ?? false,
+      statMultiplier: u.statMultiplier ?? 1,
     }))
   );
 
@@ -406,13 +427,19 @@ export const stepBattle = (params: {
             });
           }
         } else {
-          attacks.push({
-            attackerId: unit.id,
-            attackerKind: 'UNIT',
-            defenderId: target.id,
-            defenderKind: 'UNIT',
-            damage: attackDamage,
-          });
+          const archerExtraTargets = unit.type === 'ARCHER' ? unit.roundKillBlows ?? 0 : 0;
+          const targetsToHit = archerExtraTargets > 0
+            ? getUnitTargetsInAttackRange(unit, enemies).slice(0, 1 + archerExtraTargets)
+            : [target.unit];
+          for (const targetUnit of targetsToHit) {
+            attacks.push({
+              attackerId: unit.id,
+              attackerKind: 'UNIT',
+              defenderId: targetUnit.id,
+              defenderKind: 'UNIT',
+              damage: attackDamage,
+            });
+          }
         }
       }
       return;
@@ -558,8 +585,10 @@ export const stepBattle = (params: {
       const attackCooldownMs = attackedByAttacker.has(u.id) ? getUnitBlueprint(u.type).attackCooldownMs : u.attackCooldownMs;
       const gainedXp = xpGains.get(u.id) ?? 0;
       const xp = addXp(u.xp, gainedXp, u.type, u.tier);
-      const roundDamageBonusPct = (u.roundDamageBonusPct ?? 0) + (humanKillBlowCounts.get(u.id) ?? 0) * 0.01;
-      return { ...u, hp, attackCooldownMs, xp, roundDamageBonusPct };
+      const killBlowsThisStep = humanKillBlowCounts.get(u.id) ?? 0;
+      const roundDamageBonusPct = (u.roundDamageBonusPct ?? 0) + killBlowsThisStep * 0.01;
+      const roundKillBlows = (u.roundKillBlows ?? 0) + killBlowsThisStep;
+      return { ...u, hp, attackCooldownMs, xp, roundDamageBonusPct, roundKillBlows };
     })
     .filter(u => u.hp > 0);
 
@@ -578,14 +607,11 @@ export const stepBattle = (params: {
   }
   afterDeathBuffs = applyUnitHpBonuses(afterDeathBuffs);
 
-  const bloodMages = alive.filter(unit => getUnitBlueprint(unit.type).spawnsOnDeathsInRange);
-  const bloodMageSpawnCounts = new Map<number, number>(
-    bloodMages.map(unit => [unit.id, unit.bloodMageSpawnsCreated ?? 0])
-  );
   let nextSpawnId = alive.reduce((maxId, unit) => Math.max(maxId, unit.id), 0) + 1;
   const spawnedUnitsFromDeaths: UnitState[] = [];
 
   const occupiedAfterAttacks = new Map<string, string>();
+  const buildingsById = new Map<number, BuildingState>(aliveBuildings.map(building => [building.id, building]));
   for (const unit of afterDeathBuffs) {
     const footprint = getUnitFootprint(unit.type);
     for (let dy = 0; dy < footprint.height; dy++) {
@@ -602,6 +628,79 @@ export const stepBattle = (params: {
       }
     }
   }
+
+  afterDeathBuffs = afterDeathBuffs.map(unit => {
+    if (unit.type !== 'MAGE' || unit.isMirrorImage || unit.mageBlinkUsed) return unit;
+    if ((damageByDefender.get(unit.id) ?? 0) <= 0) return unit;
+
+    const incomingAttack = attacks.find(attack => attack.defenderKind === 'UNIT' && attack.defenderId === unit.id);
+    const attackerUnit = incomingAttack?.attackerKind === 'UNIT' ? unitsById.get(incomingAttack.attackerId) : null;
+    const attackerBuilding = incomingAttack?.attackerKind === 'BUILDING' ? buildingsById.get(incomingAttack.attackerId) : null;
+    const attackerCenter = attackerUnit
+      ? getUnitCenter(attackerUnit)
+      : attackerBuilding
+        ? getBuildingCenter(attackerBuilding)
+        : { x: unit.x, y: unit.team === 'PLAYER' ? unit.y + 1 : unit.y - 1 };
+
+    const unitCenter = getUnitCenter(unit);
+    const deltaX = unitCenter.x - attackerCenter.x;
+    const deltaY = unitCenter.y - attackerCenter.y;
+    const blinkDirection =
+      Math.abs(deltaY) >= Math.abs(deltaX) && deltaY !== 0
+        ? { x: 0, y: Math.sign(deltaY) }
+        : deltaX !== 0
+          ? { x: Math.sign(deltaX), y: 0 }
+          : { x: 0, y: unit.team === 'PLAYER' ? -1 : 1 };
+    const blinkOrigin = { x: unit.x + blinkDirection.x * 5, y: unit.y + blinkDirection.y * 5 };
+
+    for (const cell of getUnitFootprintCells(unit.type, { x: unit.x, y: unit.y })) {
+      occupiedAfterAttacks.delete(keyOf(cell.x, cell.y));
+    }
+
+    const blinkAnchor = findNearestOpenSpawnAnchor(params.grid, unit, blinkOrigin, occupiedAfterAttacks) ?? { x: unit.x, y: unit.y };
+    const blinkedMage = { ...unit, x: blinkAnchor.x, y: blinkAnchor.y, mageBlinkUsed: true };
+
+    for (const cell of getUnitFootprintCells(blinkedMage.type, blinkAnchor)) {
+      occupiedAfterAttacks.set(keyOf(cell.x, cell.y), `unit:${blinkedMage.id}`);
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const spawn = spawnUnitNearOrigin({
+        grid: params.grid,
+        occupiedByKey: occupiedAfterAttacks,
+        unitType: 'MAGE',
+        origin: blinkAnchor,
+        team: blinkedMage.team,
+        tier: blinkedMage.tier,
+        nextSpawnId,
+      });
+      if (!spawn) break;
+      spawnedUnitsFromDeaths.push({
+        ...spawn,
+        hp: blinkedMage.maxHp * 0.1,
+        maxHp: blinkedMage.maxHp * 0.1,
+        attackCooldownMs: blinkedMage.attackCooldownMs,
+        moveCooldownMs: blinkedMage.moveCooldownMs,
+        inactiveMsRemaining: blinkedMage.inactiveMsRemaining,
+        xp: blinkedMage.xp,
+        roundHpBonusPct: blinkedMage.roundHpBonusPct,
+        roundDamageBonusPct: blinkedMage.roundDamageBonusPct,
+        roundKillBlows: blinkedMage.roundKillBlows,
+        bloodMageSpawnsCreated: blinkedMage.bloodMageSpawnsCreated,
+        mageBlinkUsed: true,
+        isMirrorImage: true,
+        statMultiplier: 0.1,
+      });
+      nextSpawnId += 1;
+    }
+
+    return blinkedMage;
+  });
+
+  const bloodMages = alive.filter(unit => getUnitBlueprint(unit.type).spawnsOnDeathsInRange);
+  const bloodMageSpawnCounts = new Map<number, number>(
+    bloodMages.map(unit => [unit.id, unit.bloodMageSpawnsCreated ?? 0])
+  );
 
   for (const deadUnit of deadUnits) {
     if (deadUnit.type !== 'GOLEM') continue;

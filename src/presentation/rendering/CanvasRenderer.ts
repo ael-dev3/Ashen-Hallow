@@ -282,14 +282,18 @@ export class CanvasRenderer {
       const isInactive = unit.inactiveMsRemaining > 0;
 
       ctx.save();
+      ctx.globalAlpha = unit.isMirrorImage ? 0.65 : 1;
       ctx.beginPath();
       ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
       ctx.fillStyle = isInactive ? INACTIVE_UNIT_FILL : blueprint.color;
       ctx.fill();
 
       // Team border
-      ctx.lineWidth = 3;
+      ctx.lineWidth = unit.isMirrorImage ? 2 : 3;
       ctx.strokeStyle = TEAM_STROKE[unit.team];
+      if (unit.isMirrorImage) {
+        ctx.setLineDash([4, 3]);
+      }
       ctx.stroke();
 
       if (hpPct < 1) {

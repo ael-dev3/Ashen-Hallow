@@ -304,6 +304,10 @@ export const createUnit = (params: {
     tier: params.tier ?? 1,
     roundHpBonusPct: 0,
     roundDamageBonusPct: 0,
+    roundKillBlows: 0,
     bloodMageSpawnsCreated: 0,
+    mageBlinkUsed: false,
+    isMirrorImage: false,
+    statMultiplier: 1,
   };
 };
