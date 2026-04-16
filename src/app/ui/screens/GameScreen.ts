@@ -19,6 +19,7 @@ import {
   getBuildingFootprint,
   getBuildingSpawnInfo,
   getBuildingStats,
+  getKnightDamageReductionPctForTier,
 } from '../../../engine/game/buildingCatalog';
 import { toRoman, xpRequiredForTier } from '../../../engine/game/xp';
 import { GameLoop } from '../../../engine/runtime/GameLoop';
@@ -973,7 +974,7 @@ export class GameScreen implements Screen {
 
     let mechanicText = '';
     if (unitType === 'KNIGHT') {
-      mechanicText = ' Units that hit this Knight gain stacking bleed for the rest of the round, taking 1% max HP per second per stack.';
+      mechanicText = ' Units that hit this Knight gain stacking bleed for the rest of the round, taking 1% max HP per second per stack. Each upgraded tier after I also gains 10% damage reduction.';
     } else if (unitType === 'ARCHER') {
       mechanicText = ' On first contact, drops an oil flask on its target that slows enemy movement by 60% in a 10-tile radius. Also gains +1% round ATK per killing blow, and each kill lets this Archer hit 1 additional enemy in range for the rest of the round.';
     } else if (unitType === 'MAGE') {
@@ -998,7 +999,7 @@ export class GameScreen implements Screen {
     const incomeText = blueprint.goldPerTurn ? ` Income +${blueprint.goldPerTurn}g/turn.` : '';
     const attackStats = getBuildingAttackStats(buildingType, 1);
     const attackText = attackStats
-      ? ` ATK ${attackStats.attackDamage} | RNG ${attackStats.attackRange} | CD ${(attackStats.attackCooldownMs / 1000).toFixed(2)}s.`
+      ? ` ATK ${attackStats.attackDamage} | RNG ${attackStats.attackRange} | TGTS ${attackStats.maxTargets} | CD ${(attackStats.attackCooldownMs / 1000).toFixed(2)}s.`
       : '';
     const spawnInfo = getBuildingSpawnInfo(buildingType, 1);
     const spawnUnitLabel = spawnInfo ? spawnInfo.unitType.toLowerCase() : '';
@@ -1358,7 +1359,7 @@ export class GameScreen implements Screen {
       const incomeText = buildingStats.goldPerTurn > 0 ? ` | Income +${buildingStats.goldPerTurn}g/turn` : '';
       const attackStats = getBuildingAttackStats(state.selectedBuildingType, buildingTier);
       const attackText = attackStats
-        ? ` | ATK ${attackStats.attackDamage} | RNG ${attackStats.attackRange} | CD ${(attackStats.attackCooldownMs / 1000).toFixed(2)}s`
+        ? ` | ATK ${attackStats.attackDamage} | RNG ${attackStats.attackRange} | TGTS ${attackStats.maxTargets} | CD ${(attackStats.attackCooldownMs / 1000).toFixed(2)}s`
         : '';
       const spawnInfo = getBuildingSpawnInfo(state.selectedBuildingType, buildingTier);
       const spawnUnitLabel = spawnInfo ? spawnInfo.unitType.toLowerCase() : '';
@@ -1759,7 +1760,15 @@ export class GameScreen implements Screen {
         unit.team === 'PLAYER' && (state.phase === 'DEPLOYMENT' || state.phase === 'INTERMISSION')
           ? ` Tap to view upgrades: ${blueprint.placementCost}g, XP ${requiredXp} (once per turn).`
           : '';
-      return `${coordText} ${blueprint.name}${tierSuffix} (${unit.team === 'PLAYER' ? 'You' : 'Enemy'}): HP ${unit.hp}/${stats.maxHp}, ATK ${stats.attackDamage}, RNG ${blueprint.attackRange}${aoeText}, MOV ${moveSpeedText}, XP ${xpText}.${inactiveNote}${upgradeHint}`;
+      const statusParts: string[] = [];
+      if (unit.bleedStacks > 0) statusParts.push(`Bleed ${unit.bleedStacks}`);
+      if ((unit.roundDamageBonusPct ?? 0) > 0) statusParts.push(`Round ATK +${Math.round((unit.roundDamageBonusPct ?? 0) * 100)}%`);
+      if ((unit.roundKillBlows ?? 0) > 0) statusParts.push(`Kills ${unit.roundKillBlows}`);
+      if (unit.type === 'KNIGHT') {
+        statusParts.push(`DMG reduction ${Math.round(getKnightDamageReductionPctForTier(unit.tier) * 100)}%`);
+      }
+      const statusText = statusParts.length > 0 ? ` Status: ${statusParts.join(' | ')}.` : '';
+      return `${coordText} ${blueprint.name}${tierSuffix} (${unit.team === 'PLAYER' ? 'You' : 'Enemy'}): HP ${unit.hp}/${stats.maxHp}, ATK ${stats.attackDamage}, RNG ${blueprint.attackRange}${aoeText}, MOV ${moveSpeedText}, XP ${xpText}.${statusText}${inactiveNote}${upgradeHint}`;
     }
 
     const building = getBuildingAt(state.buildings, cell);
@@ -1772,8 +1781,12 @@ export class GameScreen implements Screen {
       const incomeText = stats.goldPerTurn > 0 ? `, Income +${stats.goldPerTurn}g/turn` : '';
       const attackStats = getBuildingAttackStats(building.type, building.tier ?? 1);
       const attackText = attackStats
-        ? `, ATK ${attackStats.attackDamage} | RNG ${attackStats.attackRange} | CD ${(attackStats.attackCooldownMs / 1000).toFixed(2)}s`
+        ? `, ATK ${attackStats.attackDamage} | RNG ${attackStats.attackRange} | TGTS ${attackStats.maxTargets} | CD ${(attackStats.attackCooldownMs / 1000).toFixed(2)}s`
         : '';
+      const combatBonusParts: string[] = [];
+      if ((building.roundAttackSpeedBonusPct ?? 0) > 0) combatBonusParts.push(`Round ASPD +${Math.round((building.roundAttackSpeedBonusPct ?? 0) * 100)}%`);
+      if ((building.roundSpawnRateBonusPct ?? 0) > 0) combatBonusParts.push(`Round spawn rate +${Math.round((building.roundSpawnRateBonusPct ?? 0) * 100)}%`);
+      const combatBonusText = combatBonusParts.length > 0 ? `, ${combatBonusParts.join(' | ')}` : '';
       const spawnInfo = getBuildingSpawnInfo(building.type, building.tier ?? 1);
       const spawnUnitLabel = spawnInfo ? spawnInfo.unitType.toLowerCase() : '';
       const spawnUnitSuffix = spawnInfo && spawnInfo.countPerInterval !== 1 ? 's' : '';
@@ -1783,7 +1796,7 @@ export class GameScreen implements Screen {
         building.team === 'PLAYER' && canModify && building.upgradeReady
           ? ` Upgrade ready (${blueprint.placementCost}g).`
           : '';
-      return `${coordText} ${blueprint.name}${tierText} (${building.team === 'PLAYER' ? 'You' : 'Enemy'}): HP ${building.hp}/${stats.maxHp}, Aggro ${stats.aggroRange}, Size ${footprint.width}x${footprint.height}${attackText}${incomeText}${spawnText}.${upgradeNote}`;
+      return `${coordText} ${blueprint.name}${tierText} (${building.team === 'PLAYER' ? 'You' : 'Enemy'}): HP ${building.hp}/${stats.maxHp}, Aggro ${stats.aggroRange}, Size ${footprint.width}x${footprint.height}${attackText}${incomeText}${spawnText}${combatBonusText}.${upgradeNote}`;
     }
 
     const isUnitPlacement = state.selectedPlacementKind === 'UNIT';
@@ -1811,7 +1824,7 @@ export class GameScreen implements Screen {
       : (() => {
           const attackStats = getBuildingAttackStats(state.selectedBuildingType, 1);
           if (!attackStats) return '';
-          return ` ATK ${attackStats.attackDamage} | RNG ${attackStats.attackRange} | CD ${(attackStats.attackCooldownMs / 1000).toFixed(2)}s.`;
+          return ` ATK ${attackStats.attackDamage} | RNG ${attackStats.attackRange} | TGTS ${attackStats.maxTargets} | CD ${(attackStats.attackCooldownMs / 1000).toFixed(2)}s.`;
         })();
     const selectionSpawnHint = isUnitPlacement
       ? ''

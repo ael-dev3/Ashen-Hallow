@@ -1,5 +1,22 @@
 # Ashen-Hallow Roadmap
 
+## v0.0.06 - Combat readability and escalation polish
+
+Goals:
+
+- improve combat readability by surfacing live status information on hovered units
+- make Human defenses and Orc spawners scale more dynamically inside a round
+- keep the expanded combat sandbox deterministic under regression coverage
+
+Delivered in this phase:
+
+- Archer Tower upgrades now double tower combat stats and gain +1 target per tier
+- Archer Towers gain +1% round attack speed per kill
+- Knight upgrades now grant +10% damage reduction per upgraded tier
+- Goblin Cave gains +1% round spawn rate per spawned unit
+- Blood Goblin death now splashes 1 damage to nearby enemies within 5 tiles
+- combat tooltips now surface live HP, bleed, temporary buffs, and other in-round stats
+
 ## v0.0.05 - Foundation hardening
 
 Goals:

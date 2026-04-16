@@ -224,58 +224,54 @@ const spawnBuildingUnits = (params: {
 
     let cooldown = Number.isFinite(building.spawnCooldownMs) ? building.spawnCooldownMs : spawnInfo.intervalMs;
     cooldown -= params.deltaMs;
-    let pendingSpawns = 0;
-    while (cooldown <= 0) {
-      pendingSpawns += spawnInfo.countPerInterval;
-      cooldown += spawnInfo.intervalMs;
-    }
+    let roundSpawnRateBonusPct = building.roundSpawnRateBonusPct ?? 0;
 
-    if (pendingSpawns > 0) {
-      const candidates = getSpawnRingCells(params.grid, building);
-      if (candidates.length > 0) {
-        const startIndex = building.id % candidates.length;
-        const ordered = candidates.slice(startIndex).concat(candidates.slice(0, startIndex));
-        const spawnFootprint = getUnitFootprint(spawnInfo.unitType);
-        const canSpawnAt = (cell: CellCoord): boolean => {
-          for (let dy = 0; dy < spawnFootprint.height; dy++) {
-            for (let dx = 0; dx < spawnFootprint.width; dx++) {
-              const x = cell.x + dx;
-              const y = cell.y + dy;
-              if (x < 0 || y < 0 || x >= params.grid.cols || y >= params.grid.rows) return false;
-              if (occupied.has(keyOf(x, y))) return false;
-            }
-          }
-          return true;
-        };
-        for (const cell of ordered) {
-          if (pendingSpawns <= 0) break;
-          if (!canSpawnAt(cell)) continue;
-          const id = nextUnitId++;
-          spawnedUnits.push(
-            createUnit({
-              id,
-              team: building.team,
-              type: spawnInfo.unitType,
-              x: cell.x,
-              y: cell.y,
-              tier: buildingTier,
-              xp: 0,
-            })
-          );
-          if (spawnInfo.unitType === 'GOBLIN') {
-            spawnedGoblins += 1;
-          }
-          for (let dy = 0; dy < spawnFootprint.height; dy++) {
-            for (let dx = 0; dx < spawnFootprint.width; dx++) {
-              occupied.add(keyOf(cell.x + dx, cell.y + dy));
-            }
-          }
-          pendingSpawns -= 1;
+    const candidates = getSpawnRingCells(params.grid, building);
+    const startIndex = candidates.length > 0 ? building.id % candidates.length : 0;
+    const ordered = candidates.slice(startIndex).concat(candidates.slice(0, startIndex));
+    const spawnFootprint = getUnitFootprint(spawnInfo.unitType);
+    const canSpawnAt = (cell: CellCoord): boolean => {
+      for (let dy = 0; dy < spawnFootprint.height; dy++) {
+        for (let dx = 0; dx < spawnFootprint.width; dx++) {
+          const x = cell.x + dx;
+          const y = cell.y + dy;
+          if (x < 0 || y < 0 || x >= params.grid.cols || y >= params.grid.rows) return false;
+          if (occupied.has(keyOf(x, y))) return false;
         }
       }
+      return true;
+    };
+
+    while (cooldown <= 0) {
+      for (let spawnIndex = 0; spawnIndex < spawnInfo.countPerInterval; spawnIndex++) {
+        const spawnCell = ordered.find(cell => canSpawnAt(cell));
+        if (!spawnCell) break;
+        const id = nextUnitId++;
+        spawnedUnits.push(
+          createUnit({
+            id,
+            team: building.team,
+            type: spawnInfo.unitType,
+            x: spawnCell.x,
+            y: spawnCell.y,
+            tier: buildingTier,
+            xp: 0,
+          })
+        );
+        if (spawnInfo.unitType === 'GOBLIN') {
+          spawnedGoblins += 1;
+        }
+        for (let dy = 0; dy < spawnFootprint.height; dy++) {
+          for (let dx = 0; dx < spawnFootprint.width; dx++) {
+            occupied.add(keyOf(spawnCell.x + dx, spawnCell.y + dy));
+          }
+        }
+        roundSpawnRateBonusPct += 0.01;
+      }
+      cooldown += spawnInfo.intervalMs / (1 + roundSpawnRateBonusPct);
     }
 
-    return { ...building, spawnCooldownMs: Math.max(0, cooldown) };
+    return { ...building, spawnCooldownMs: Math.max(0, cooldown), roundSpawnRateBonusPct };
   });
 
   return {
@@ -324,6 +320,8 @@ const prepareBuildingsForBattle = (buildings: readonly GameState['buildings'][nu
       ...building,
       spawnCooldownMs: spawnInfo ? spawnInfo.intervalMs : building.spawnCooldownMs,
       attackCooldownMs: attackStats ? 0 : building.attackCooldownMs,
+      roundAttackSpeedBonusPct: 0,
+      roundSpawnRateBonusPct: 0,
     };
   });
 

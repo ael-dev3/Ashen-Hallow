@@ -262,6 +262,19 @@ export class CanvasRenderer {
 
     }
 
+    const hoveredCell = state.hoveredCell;
+    const hoveredUnitId = hoveredCell
+      ? state.units.find(unit => {
+          const footprint = getUnitFootprint(unit.type);
+          return (
+            hoveredCell.x >= unit.x &&
+            hoveredCell.x < unit.x + footprint.width &&
+            hoveredCell.y >= unit.y &&
+            hoveredCell.y < unit.y + footprint.height
+          );
+        })?.id ?? null
+      : null;
+
     // Buildings
     for (const building of state.buildings) {
       if (building.hp <= 0) continue;
@@ -327,7 +340,7 @@ export class CanvasRenderer {
         ctx.fillText(tierText, textX, textY);
       }
 
-      if (state.selectedUnitId === unit.id) {
+      if (state.selectedUnitId === unit.id || (state.phase === 'BATTLE' && hoveredUnitId === unit.id)) {
         this.drawSelectionRing(center.x, center.y, radius);
       }
 

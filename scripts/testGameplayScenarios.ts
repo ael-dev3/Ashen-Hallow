@@ -1,4 +1,5 @@
 import { GAME_CONFIG } from '../src/engine/config/gameConfig';
+import { GameScreen } from '../src/app/ui/screens/GameScreen';
 import { createBuilding, getBuildingBlueprint } from '../src/engine/game/buildingCatalog';
 import { spawnEnemyUnits } from '../src/engine/game/enemySpawner';
 import { isPlayerDeployableCell } from '../src/engine/game/grid';
@@ -23,6 +24,12 @@ const assertEqual = <T>(actual: T, expected: T, message: string): void => {
 const assertOk = (value: unknown, message: string): void => {
   if (!value) {
     fail(message);
+  }
+};
+
+const assertApproxEqual = (actual: number, expected: number, tolerance: number, message: string): void => {
+  if (Math.abs(actual - expected) > tolerance) {
+    fail(`${message} (expected ${expected} ± ${tolerance}, got ${actual})`);
   }
 };
 
@@ -320,6 +327,148 @@ runTest('archer tower upgrade increases damage and max hp', () => {
   assertEqual(tower?.maxHp ?? 0, 200, 'Archer Tower max HP should scale with tier.');
 });
 
+runTest('tier-2 archer tower hits an additional target and doubles damage', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const tower = createBuilding({ id: 1, team: 'PLAYER', type: 'ARCHER_TOWER', x: 10, y: 10, tier: 2, upgradeReady: true });
+  const enemyKnightA = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'KNIGHT', x: 11, y: 11 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyKnightB = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'KNIGHT', x: 12, y: 11 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [enemyKnightA, enemyKnightB],
+    buildings: [tower],
+    deltaMs: 100,
+  });
+
+  const nextKnightA = result.units.find(unit => unit.id === enemyKnightA.id);
+  const nextKnightB = result.units.find(unit => unit.id === enemyKnightB.id);
+  assertOk(!!nextKnightA, 'First enemy Knight should survive the tower shot.');
+  assertOk(!!nextKnightB, 'Second enemy Knight should also be targeted after the tower upgrade.');
+  assertEqual(nextKnightA?.hp ?? 0, enemyKnightA.hp - 8, 'Tier-2 Archer Tower should deal double base damage to its first target.');
+  assertEqual(nextKnightB?.hp ?? 0, enemyKnightB.hp - 8, 'Tier-2 Archer Tower should gain one extra target per upgrade.');
+});
+
+runTest('knight upgrades add 10% damage reduction per upgraded level', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const tierOneKnight = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'KNIGHT', x: 10, y: 10, tier: 1 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const tierThreeKnight = {
+    ...createUnit({ id: 2, team: 'PLAYER', type: 'KNIGHT', x: 12, y: 10, tier: 3 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyArcherA = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'ARCHER', x: 10, y: 14 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+  const enemyArcherB = {
+    ...createUnit({ id: 4, team: 'ENEMY', type: 'ARCHER', x: 12, y: 14 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [tierOneKnight, tierThreeKnight, enemyArcherA, enemyArcherB],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const nextTierOneKnight = result.units.find(unit => unit.id === tierOneKnight.id);
+  const nextTierThreeKnight = result.units.find(unit => unit.id === tierThreeKnight.id);
+  assertOk(!!nextTierOneKnight, 'Tier-1 Knight should survive the comparison hit.');
+  assertOk(!!nextTierThreeKnight, 'Tier-3 Knight should survive the comparison hit.');
+  assertEqual(nextTierOneKnight?.hp ?? 0, tierOneKnight.hp - 4, 'Baseline Knight should take the Archer full hit.');
+  assertEqual(nextTierThreeKnight?.hp ?? 0, tierThreeKnight.hp - 3.2, 'Tier-3 Knight should reduce incoming damage by 20%.');
+});
+
+runTest('archer tower gains 1% attack speed each time it gets a kill until round end', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const tower = createBuilding({ id: 1, team: 'PLAYER', type: 'ARCHER_TOWER', x: 10, y: 10, tier: 1, upgradeReady: true });
+  const doomedGoblin = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'GOBLIN', x: 11, y: 11 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyKnight = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'KNIGHT', x: 12, y: 11 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [doomedGoblin, enemyKnight],
+    buildings: [tower],
+    deltaMs: 100,
+  });
+
+  const nextTower = result.buildings.find(building => building.id === tower.id);
+  assertOk(!!nextTower, 'Archer Tower should still exist after the kill.');
+  assertOk(!result.units.some(unit => unit.id === doomedGoblin.id), 'Archer Tower should get the kill that grants attack speed.');
+  assertApproxEqual(nextTower?.attackCooldownMs ?? 0, 750 / 1.01, 0.1, 'Archer Tower should attack slightly faster after each kill in the round.');
+});
+
+runTest('goblin cave gains 1% spawn rate each time it spawns until round end', () => {
+  const initial = createInitialGameState('ORC', 'HUMAN');
+  const cave = createBuilding({ id: 1, team: 'PLAYER', type: 'GOBLIN_CAVE', x: 2, y: 2, tier: 1, spawnCooldownMs: 1000 });
+  const playerKnight = {
+    ...createUnit({ id: 2, team: 'PLAYER', type: 'KNIGHT', x: 10, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyKnight = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'KNIGHT', x: 30, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const nextState = gameReducer({
+    ...initial,
+    phase: 'BATTLE',
+    units: [playerKnight, enemyKnight],
+    buildings: [cave],
+    nextUnitId: 4,
+    battleTimeMs: 0,
+    result: null,
+  }, { type: 'TICK', deltaMs: 1000 });
+
+  const nextCave = nextState.buildings.find(building => building.id === cave.id);
+  assertOk(!!nextCave, 'Goblin Cave should remain after spawning.');
+  assertEqual(nextState.units.filter(unit => unit.type === 'GOBLIN' && unit.team === 'PLAYER').length, 1, 'Goblin Cave should spawn its goblin.');
+  assertApproxEqual(nextCave?.spawnCooldownMs ?? 0, 1000 / 1.01, 0.1, 'Goblin Cave should slightly shorten its next spawn interval after each spawn.');
+});
+
+runTest('combat unit tooltip exposes live hp, bleed, and other combat stats', () => {
+  const state = createInitialGameState('HUMAN', 'ORC');
+  const knight = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'KNIGHT', x: 10, y: 10, tier: 3 }),
+    hp: 37,
+    bleedStacks: 2,
+    roundDamageBonusPct: 0.15,
+    roundKillBlows: 1,
+  };
+  const text = (GameScreen.prototype as any).getCellTooltipText.call({}, { ...state, phase: 'BATTLE', units: [knight] }, { x: 10, y: 10 }) as string | null;
+
+  assertOk(!!text, 'Combat hover should show a tooltip for highlighted units.');
+  assertOk(text?.includes('HP 37/48'), 'Combat tooltip should show the unit\'s remaining HP.');
+  assertOk(text?.includes('Bleed 2'), 'Combat tooltip should show active bleed stacks.');
+  assertOk(text?.includes('DMG reduction 20%'), 'Combat tooltip should show Knight damage reduction from upgrades.');
+  assertOk(text?.includes('Round ATK +15%'), 'Combat tooltip should show temporary combat buffs.');
+});
+
 runTest('building placement does not consume unit placement slots', () => {
   const initial = createInitialGameState();
   const placementCell = findFirstPlayerDeployableCell(initial);
@@ -547,6 +696,41 @@ runTest('blood mage attacks enemies in range without friendly fire', () => {
   assertOk(!result.units.some(unit => unit.id === enemyKnight.id), 'Blood Mage should still damage enemy units in range.');
 });
 
+runTest('blood goblin death deals 1 damage to all nearby enemy units within 5 range', () => {
+  const initial = createInitialGameState('ORC', 'HUMAN');
+  const bloodGoblin = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'BLOOD_GOBLIN', x: 10, y: 10 }),
+    hp: 1,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyKnightNear = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'KNIGHT', x: 11, y: 10 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+  const enemyKnightFar = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'KNIGHT', x: 20, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [bloodGoblin, enemyKnightNear, enemyKnightFar],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const nextNearKnight = result.units.find(unit => unit.id === enemyKnightNear.id);
+  const nextFarKnight = result.units.find(unit => unit.id === enemyKnightFar.id);
+  assertOk(!result.units.some(unit => unit.id === bloodGoblin.id), 'Blood Goblin should die in the setup attack.');
+  assertOk(!!nextNearKnight, 'Nearby enemy should survive the splash test.');
+  assertOk(!!nextFarKnight, 'Far enemy should survive the splash test.');
+  assertEqual(nextNearKnight?.hp ?? 0, enemyKnightNear.hp - 1, 'Nearby enemy should take 1 Blood Goblin death damage.');
+  assertEqual(nextFarKnight?.hp ?? 0, enemyKnightFar.hp, 'Distant enemy should not take Blood Goblin death damage.');
+});
+
 runTest('each blood mage in range spawns blood goblins into nearest open cells for a death in range', () => {
   const initial = createInitialGameState('ORC', 'HUMAN');
   const bloodMageA = {
@@ -607,7 +791,7 @@ runTest('blood goblin inherits the tier of the dead unit', () => {
   };
   const doomedTierThreeKnight = {
     ...createUnit({ id: 2, team: 'ENEMY', type: 'KNIGHT', x: 12, y: 10, tier: 3 }),
-    hp: 1,
+    hp: 0.8,
     maxHp: getUnitBlueprint('KNIGHT').maxHp * 3,
     attackCooldownMs: 999,
     moveCooldownMs: 999,

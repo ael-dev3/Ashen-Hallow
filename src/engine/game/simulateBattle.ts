@@ -11,7 +11,7 @@ import {
   isGoblinPackUnitType,
   isHumanUnitType,
 } from './unitCatalog';
-import { getBuildingAttackStats, getBuildingCenter, getBuildingFootprint, getBuildingStats } from './buildingCatalog';
+import { getBuildingAttackStats, getBuildingCenter, getBuildingFootprint, getBuildingStats, getKnightDamageReductionPctForTier } from './buildingCatalog';
 import { addXp, XP_REWARD } from './xp';
 
 const manhattan = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
@@ -359,6 +359,8 @@ export const stepBattle = (params: {
   const aliveBuildings = params.buildings.filter(b => b.hp > 0).map(b => ({
     ...b,
     attackCooldownMs: Math.max(0, b.attackCooldownMs - params.deltaMs),
+    roundAttackSpeedBonusPct: b.roundAttackSpeedBonusPct ?? 0,
+    roundSpawnRateBonusPct: b.roundSpawnRateBonusPct ?? 0,
   }));
 
   const playerUnits = alive.filter(u => u.team === 'PLAYER');
@@ -499,30 +501,29 @@ export const stepBattle = (params: {
     if (!attackStats) return;
     if (building.attackCooldownMs > 0) return;
     const buildingCenter = getBuildingCenter(building);
-    let bestTarget: UnitState | null = null;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (const enemy of enemies) {
-      const enemyCenter = getUnitCenter(enemy);
-      const dist =
-        attackStats.attackDistance === 'CHEBYSHEV'
-          ? chebyshev(buildingCenter, enemyCenter)
-          : manhattan(buildingCenter, enemyCenter);
-      if (dist > attackStats.attackRange) continue;
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestTarget = enemy;
-      } else if (dist === bestDist && bestTarget && enemy.id < bestTarget.id) {
-        bestTarget = enemy;
-      }
+    const targets = enemies
+      .map(enemy => {
+        const enemyCenter = getUnitCenter(enemy);
+        const dist =
+          attackStats.attackDistance === 'CHEBYSHEV'
+            ? chebyshev(buildingCenter, enemyCenter)
+            : manhattan(buildingCenter, enemyCenter);
+        return { enemy, dist };
+      })
+      .filter(candidate => candidate.dist <= attackStats.attackRange)
+      .sort((a, b) => (a.dist === b.dist ? a.enemy.id - b.enemy.id : a.dist - b.dist))
+      .slice(0, attackStats.maxTargets)
+      .map(candidate => candidate.enemy);
+    if (targets.length === 0) return;
+    for (const target of targets) {
+      attacks.push({
+        attackerId: building.id,
+        attackerKind: 'BUILDING',
+        defenderId: target.id,
+        defenderKind: 'UNIT',
+        damage: attackStats.attackDamage,
+      });
     }
-    if (!bestTarget) return;
-    attacks.push({
-      attackerId: building.id,
-      attackerKind: 'BUILDING',
-      defenderId: bestTarget.id,
-      defenderKind: 'UNIT',
-      damage: attackStats.attackDamage,
-    });
     buildingsThatAttacked.add(building.id);
   };
 
@@ -560,14 +561,17 @@ export const stepBattle = (params: {
       damageByBuilding.set(a.defenderId, (damageByBuilding.get(a.defenderId) ?? 0) + a.damage);
       continue;
     }
-    damageByDefender.set(a.defenderId, (damageByDefender.get(a.defenderId) ?? 0) + a.damage);
-    if (a.attackerKind === 'UNIT') {
-      const list = attacksByDefender.get(a.defenderId);
-      if (list) {
-        list.push(a);
-      } else {
-        attacksByDefender.set(a.defenderId, [a]);
-      }
+    const defender = unitsById.get(a.defenderId);
+    const mitigatedDamage = defender?.type === 'KNIGHT'
+      ? a.damage * (1 - getKnightDamageReductionPctForTier(defender.tier))
+      : a.damage;
+    damageByDefender.set(a.defenderId, (damageByDefender.get(a.defenderId) ?? 0) + mitigatedDamage);
+    const list = attacksByDefender.get(a.defenderId);
+    const storedAttack = mitigatedDamage === a.damage ? a : { ...a, damage: mitigatedDamage };
+    if (list) {
+      list.push(storedAttack);
+    } else {
+      attacksByDefender.set(a.defenderId, [storedAttack]);
     }
   }
 
@@ -581,25 +585,30 @@ export const stepBattle = (params: {
   }
   const xpGains = new Map<number, number>();
   const humanKillBlowCounts = new Map<number, number>();
+  const buildingKillCounts = new Map<number, number>();
 
   for (const [defenderId, defenderAttacks] of attacksByDefender) {
     const defender = alive.find(u => u.id === defenderId);
     if (!defender) continue;
     let remainingHp = defender.hp;
-    let killerId: number | null = null;
+    let killerAttack: AttackIntent | null = null;
     for (const attack of defenderAttacks) {
       remainingHp -= attack.damage;
       if (remainingHp <= 0) {
-        killerId = attack.attackerId;
+        killerAttack = attack;
         break;
       }
     }
-    if (killerId === null) continue;
-    const gain = XP_REWARD[defender.type];
-    xpGains.set(killerId, (xpGains.get(killerId) ?? 0) + gain);
-    const killer = unitsById.get(killerId);
-    if (killer && isHumanUnitType(killer.type)) {
-      humanKillBlowCounts.set(killerId, (humanKillBlowCounts.get(killerId) ?? 0) + 1);
+    if (!killerAttack) continue;
+    if (killerAttack.attackerKind === 'UNIT') {
+      const gain = XP_REWARD[defender.type];
+      xpGains.set(killerAttack.attackerId, (xpGains.get(killerAttack.attackerId) ?? 0) + gain);
+      const killer = unitsById.get(killerAttack.attackerId);
+      if (killer && isHumanUnitType(killer.type)) {
+        humanKillBlowCounts.set(killerAttack.attackerId, (humanKillBlowCounts.get(killerAttack.attackerId) ?? 0) + 1);
+      }
+    } else {
+      buildingKillCounts.set(killerAttack.attackerId, (buildingKillCounts.get(killerAttack.attackerId) ?? 0) + 1);
     }
   }
 
@@ -608,13 +617,17 @@ export const stepBattle = (params: {
       const damage = damageByBuilding.get(b.id) ?? 0;
       const hp = Math.max(0, b.hp - damage);
       const attackStats = getBuildingAttackStats(b.type, b.tier ?? 1);
+      const killCount = buildingKillCounts.get(b.id) ?? 0;
+      const roundAttackSpeedBonusPct = (b.roundAttackSpeedBonusPct ?? 0) + killCount * 0.01;
       const attackCooldownMs =
-        buildingsThatAttacked.has(b.id) && attackStats ? attackStats.attackCooldownMs : b.attackCooldownMs;
-      return { ...b, hp, attackCooldownMs };
+        buildingsThatAttacked.has(b.id) && attackStats
+          ? attackStats.attackCooldownMs / (1 + roundAttackSpeedBonusPct)
+          : b.attackCooldownMs;
+      return { ...b, hp, attackCooldownMs, roundAttackSpeedBonusPct };
     })
     .filter(b => b.hp > 0);
 
-  const afterAttacks = alive
+  let afterAttacks = alive
     .map(u => {
       const totalDamage = damageByDefender.get(u.id) ?? 0;
       const attackCooldownMs = attackedByAttacker.has(u.id) ? getUnitBlueprint(u.type).attackCooldownMs : u.attackCooldownMs;
@@ -641,6 +654,27 @@ export const stepBattle = (params: {
       };
     })
     .filter(u => u.hp > 0);
+
+  const processedBloodGoblinDeaths = new Set<number>();
+  while (true) {
+    const newlyDeadBloodGoblins = alive.filter(
+      unit => unit.type === 'BLOOD_GOBLIN' && !processedBloodGoblinDeaths.has(unit.id) && !afterAttacks.some(survivor => survivor.id === unit.id)
+    );
+    if (newlyDeadBloodGoblins.length === 0) break;
+    const splashDamageByUnit = new Map<number, number>();
+    for (const deadBloodGoblin of newlyDeadBloodGoblins) {
+      processedBloodGoblinDeaths.add(deadBloodGoblin.id);
+      for (const survivor of afterAttacks) {
+        if (survivor.team === deadBloodGoblin.team) continue;
+        if (chebyshev(getUnitCenter(survivor), getUnitCenter(deadBloodGoblin)) > 5) continue;
+        splashDamageByUnit.set(survivor.id, (splashDamageByUnit.get(survivor.id) ?? 0) + 1);
+      }
+    }
+    if (splashDamageByUnit.size === 0) continue;
+    afterAttacks = afterAttacks
+      .map(unit => ({ ...unit, hp: Math.max(0, unit.hp - (splashDamageByUnit.get(unit.id) ?? 0)) }))
+      .filter(unit => unit.hp > 0);
+  }
 
   const deadUnits = alive.filter(unit => !afterAttacks.some(survivor => survivor.id === unit.id));
   let afterDeathBuffs = afterAttacks.map(unit => ({ ...unit }));

@@ -3,7 +3,7 @@
 Ashen-Hallow is a browser-based fantasy autobattler built with TypeScript and deployed on GitHub Pages. It started as a focused standalone rebuild of an earlier prototype and is now being hardened into a more professional, expandable strategy game with stronger combat identity, clearer faction mechanics, and a better long-term architecture plan.
 
 **Live game:** https://ael-dev3.github.io/Ashen-Hallow/  
-**Current version:** `v0.0.05`
+**Current version:** `v0.0.06`
 
 ## Overview
 
@@ -17,6 +17,14 @@ Ashen-Hallow is built around a fast preparation-and-resolution loop:
 - outlast the opposing warhost before your side collapses
 
 The current playable foundation is focused on deterministic combat, faction asymmetry, and a darker crimson sacred-horror presentation.
+
+## v0.0.06 highlights
+
+- Archer Tower upgrades now double tower combat stats, gain additional targets, and ramp attack speed on kills
+- Knight upgrades now add stacking damage reduction per upgraded tier
+- Goblin Cave spawn tempo now accelerates throughout each round
+- Blood Goblin deaths now punish nearby enemies with splash damage
+- hovered combat tooltips now expose live HP, bleed, and temporary round buffs for faster battlefield reads
 
 ## Core gameplay pillars
 

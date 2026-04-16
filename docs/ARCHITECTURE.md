@@ -20,6 +20,13 @@ The game is playable, deterministic, and regression-tested, but several systems 
 - `src/presentation/input` — board interaction and camera controls
 - `src/app/ui` — menus, screens, HUD, audio, tooltips
 
+## v0.0.06 priorities
+
+1. keep the game playable and deterministic while mechanics expand
+2. make combat-state information visible enough for players to parse live fights quickly
+3. support more round-scaling building behaviors without breaking reducer/sim consistency
+4. continue documenting a credible path away from prototype-style file sprawl
+
 ## v0.0.05 priorities
 
 1. keep the game playable and deterministic while mechanics expand

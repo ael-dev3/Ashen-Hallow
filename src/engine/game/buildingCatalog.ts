@@ -64,6 +64,16 @@ export interface BuildingSpawnInfo {
   countPerInterval: number;
 }
 
+const getBuildingTierMultiplier = (buildingType: BuildingType, tier: number): number => {
+  const safeTier = Math.max(1, Math.floor(tier));
+  if (buildingType === 'ARCHER_TOWER') {
+    return 2 ** (safeTier - 1);
+  }
+  return safeTier;
+};
+
+export const getKnightDamageReductionPctForTier = (tier: number): number => Math.max(0, Math.floor(tier) - 1) * 0.1;
+
 export const getBuildingSpawnInfo = (buildingType: BuildingType, tier: number): BuildingSpawnInfo | null => {
   if (buildingType !== 'GOBLIN_CAVE') return null;
   const safeTier = Math.max(1, Math.floor(tier));
@@ -80,11 +90,12 @@ export const getBuildingStats = (
 ): { maxHp: number; aggroRange: number; goldPerTurn: number } => {
   const blueprint = getBuildingBlueprint(buildingType);
   const safeTier = Math.max(1, Math.floor(tier));
+  const multiplier = getBuildingTierMultiplier(buildingType, safeTier);
   const baseGold = blueprint.goldPerTurn ?? 0;
   const hasGoldScaling = baseGold > 0;
   return {
-    maxHp: blueprint.maxHp * safeTier,
-    aggroRange: blueprint.aggroRange * safeTier,
+    maxHp: blueprint.maxHp * multiplier,
+    aggroRange: blueprint.aggroRange * multiplier,
     goldPerTurn: hasGoldScaling ? baseGold + (safeTier - 1) : 0,
   };
 };
@@ -92,7 +103,7 @@ export const getBuildingStats = (
 export const getBuildingAttackStats = (
   buildingType: BuildingType,
   tier: number
-): { attackDamage: number; attackRange: number; attackCooldownMs: number; attackDistance: 'MANHATTAN' | 'CHEBYSHEV' } | null => {
+): { attackDamage: number; attackRange: number; attackCooldownMs: number; attackDistance: 'MANHATTAN' | 'CHEBYSHEV'; maxTargets: number } | null => {
   const blueprint = getBuildingBlueprint(buildingType);
   if (
     blueprint.attackDamage === undefined ||
@@ -102,11 +113,13 @@ export const getBuildingAttackStats = (
     return null;
   }
   const safeTier = Math.max(1, Math.floor(tier));
+  const multiplier = getBuildingTierMultiplier(buildingType, safeTier);
   return {
-    attackDamage: blueprint.attackDamage * safeTier,
-    attackRange: blueprint.attackRange,
+    attackDamage: blueprint.attackDamage * multiplier,
+    attackRange: blueprint.attackRange * multiplier,
     attackCooldownMs: blueprint.attackCooldownMs,
     attackDistance: blueprint.attackDistance ?? 'MANHATTAN',
+    maxTargets: buildingType === 'ARCHER_TOWER' ? safeTier : 1,
   };
 };
 
@@ -165,5 +178,7 @@ export const createBuilding = (params: {
     upgradeReady: params.upgradeReady ?? false,
     spawnCooldownMs: params.spawnCooldownMs ?? spawnInfo?.intervalMs ?? 0,
     attackCooldownMs: params.attackCooldownMs ?? 0,
+    roundAttackSpeedBonusPct: 0,
+    roundSpawnRateBonusPct: 0,
   };
 };

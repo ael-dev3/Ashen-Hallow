@@ -107,6 +107,8 @@ export interface BuildingState {
   upgradeReady: boolean;
   spawnCooldownMs: number;
   attackCooldownMs: number;
+  roundAttackSpeedBonusPct: number;
+  roundSpawnRateBonusPct: number;
 }
 
 export type SfxEventKind =
