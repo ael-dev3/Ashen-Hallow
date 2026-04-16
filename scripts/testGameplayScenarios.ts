@@ -5,7 +5,7 @@ import { isPlayerDeployableCell } from '../src/engine/game/grid';
 import { createInitialGameState } from '../src/engine/game/initialState';
 import { gameReducer } from '../src/engine/game/reducer';
 import { stepBattle } from '../src/engine/game/simulateBattle';
-import { createUnit } from '../src/engine/game/unitCatalog';
+import { createUnit, getUnitBlueprint } from '../src/engine/game/unitCatalog';
 import type { CellCoord, DeploymentUnit, GameState } from '../src/engine/game/types';
 
 const fail = (message: string): never => {
@@ -108,6 +108,7 @@ runTest('enemy mirror avoidance replaces a whole placement instead of spawning a
       MAGE: false,
       BLOOD_MAGE: false,
       GOLEM: false,
+      HOBGOBLIN: false,
     },
     enemyPlacementSlots: 1,
     enemyNextPlacementSlotCost: 2,
@@ -139,6 +140,7 @@ runTest('enemy AI can take a loan to create an opening deployment', () => {
       MAGE: false,
       BLOOD_MAGE: false,
       GOLEM: false,
+      HOBGOBLIN: false,
     },
     enemyPlacementSlots: 1,
     enemyNextPlacementSlotCost: 2,
@@ -285,6 +287,63 @@ runTest('race selection limits the player roster for humans and orcs', () => {
   const orcTowerUnlockAttempt = gameReducer(orcState, { type: 'SELECT_BUILDING', buildingType: 'ARCHER_TOWER' });
   assertEqual(orcTowerUnlockAttempt.gold, orcState.gold, 'Orcs should not spend gold on Human-only buildings.');
   assertOk(!orcTowerUnlockAttempt.unlockedBuildings.ARCHER_TOWER, 'Orcs should not be able to unlock Archer Tower.');
+
+  const orcHobgoblinSelect = gameReducer(orcState, { type: 'SELECT_UNIT', unitType: 'HOBGOBLIN' });
+  assertEqual(orcHobgoblinSelect.selectedUnitType, 'HOBGOBLIN', 'Orcs should be able to select Hobgoblin.');
+});
+
+runTest('hobgoblin uses double knight baseline stats and cleave data', () => {
+  const knight = createUnit({ id: 1, team: 'PLAYER', type: 'KNIGHT', x: 5, y: 5 });
+  const hobgoblin = createUnit({ id: 2, team: 'PLAYER', type: 'HOBGOBLIN', x: 6, y: 5 });
+  const knightBlueprint = getUnitBlueprint('KNIGHT');
+  const hobgoblinBlueprint = getUnitBlueprint('HOBGOBLIN');
+
+  assertEqual(hobgoblin.maxHp, knight.maxHp * 2, 'Hobgoblin HP should be double Knight HP.');
+  assertEqual(hobgoblinBlueprint.attackDamage, knightBlueprint.attackDamage * 2, 'Hobgoblin ATK should be double Knight ATK.');
+  assertEqual(hobgoblinBlueprint.unlockCost, 2, 'Hobgoblin unlock cost should be 2g.');
+  assertEqual(hobgoblinBlueprint.placementCost, 2, 'Hobgoblin placement cost should be 2g.');
+  assertOk((hobgoblinBlueprint.aoeRadius ?? 0) > 0, 'Hobgoblin should have cleave damage.');
+});
+
+runTest('hobgoblins gain max hp from nearby hobgoblins and goblin deaths in range for the round', () => {
+  const initial = createInitialGameState('ORC', 'HUMAN');
+  const hobgoblinA = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'HOBGOBLIN', x: 10, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const hobgoblinB = {
+    ...createUnit({ id: 2, team: 'PLAYER', type: 'HOBGOBLIN', x: 12, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const doomedGoblin = {
+    ...createUnit({ id: 3, team: 'PLAYER', type: 'GOBLIN', x: 11, y: 10 }),
+    hp: 1,
+    maxHp: 1,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyKnight = {
+    ...createUnit({ id: 4, team: 'ENEMY', type: 'KNIGHT', x: 11, y: 11 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [hobgoblinA, hobgoblinB, doomedGoblin, enemyKnight],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const buffedHobgoblins = result.units.filter(unit => unit.type === 'HOBGOBLIN');
+  assertEqual(buffedHobgoblins.length, 2, 'Both Hobgoblins should survive the setup.');
+  const expectedHp = 32 * 1.11;
+  for (const hobgoblin of buffedHobgoblins) {
+    assertEqual(hobgoblin.maxHp, expectedHp, 'Nearby Hobgoblin and Goblin death buffs should stack on Hobgoblin max HP.');
+    assertEqual(hobgoblin.hp, expectedHp, 'The max HP buff should also grant current HP for the round.');
+  }
 });
 
 runTest('blood mage attacks all units in range', () => {

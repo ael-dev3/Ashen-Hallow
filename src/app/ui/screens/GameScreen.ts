@@ -988,6 +988,8 @@ export class GameScreen implements Screen {
       mechanicText = ' On death, it bursts into a full Goblin Squad around its death location.';
     } else if (unitType === 'GOBLIN') {
       mechanicText = ' Gains +10% ATK per nearby Goblin or Blood Goblin within 10 tiles.';
+    } else if (unitType === 'HOBGOBLIN') {
+      mechanicText = ' Cleaves nearby enemies. Gains +10% max HP per nearby Hobgoblin within a 20-tile square radius, and gains +1% round max HP each time a Goblin or Blood Goblin dies within that radius.';
     }
 
     return `${blueprint.name}: Unlock ${blueprint.unlockCost}g (once). Place ${blueprint.placementCost}g. HP ${blueprint.maxHp}, ATK ${blueprint.attackDamage}, RNG ${blueprint.attackRange}${aoeText}, MOV ${moveSpeedText}.${sizeText}${squadText}${mechanicText}`;

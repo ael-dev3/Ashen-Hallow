@@ -1,7 +1,7 @@
 import type { BuildingType, Race, UnitType } from './types';
 
 const HUMAN_UNIT_TYPES: UnitType[] = ['KNIGHT', 'ARCHER', 'SNIPER', 'MAGE'];
-const ORC_UNIT_TYPES: UnitType[] = ['GOBLIN', 'GOLEM', 'BLOOD_MAGE'];
+const ORC_UNIT_TYPES: UnitType[] = ['GOBLIN', 'GOLEM', 'BLOOD_MAGE', 'HOBGOBLIN'];
 
 const HUMAN_BUILDING_TYPES: BuildingType[] = ['GOLD_MINE', 'ARCHER_TOWER'];
 const ORC_BUILDING_TYPES: BuildingType[] = ['GOLD_MINE', 'GOBLIN_CAVE'];

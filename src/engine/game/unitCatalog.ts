@@ -139,6 +139,24 @@ const UNIT_CATALOG: Record<UnitType, UnitBlueprint> = {
     moveSpeed: MS_PER_SECOND / 280,
     color: '#7c7272',
   },
+  HOBGOBLIN: {
+    type: 'HOBGOBLIN',
+    name: 'Hobgoblin',
+    unlockCost: 2,
+    placementCost: 2,
+    maxHp: 32,
+    attackDamage: 4,
+    attackRange: 1,
+    aoeRadius: 1,
+    allyMaxHpBonusRadius: 20,
+    allyMaxHpBonusPerUnit: 0.1,
+    goblinDeathHpBonusRadius: 20,
+    goblinDeathHpBonusPerDeath: 0.01,
+    attackCooldownMs: 1050,
+    moveCooldownMs: 280,
+    moveSpeed: MS_PER_SECOND / 280,
+    color: '#6f1f1f',
+  },
 };
 
 export const getUnitBlueprint = (unitType: UnitType): UnitBlueprint => {
@@ -218,6 +236,7 @@ export const getCounterUnitType = (unitType: UnitType): UnitType => {
     case 'BLOOD_MAGE':
       return 'KNIGHT';
     case 'GOLEM':
+    case 'HOBGOBLIN':
       return 'MAGE';
     case 'GOBLIN':
     case 'BLOOD_GOBLIN':
@@ -280,5 +299,6 @@ export const createUnit = (params: {
     inactiveMsRemaining: params.inactiveMsRemaining ?? 0,
     xp: params.xp ?? 0,
     tier: params.tier ?? 1,
+    roundHpBonusPct: 0,
   };
 };

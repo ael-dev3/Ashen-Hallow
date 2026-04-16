@@ -12,6 +12,7 @@ const createUnlockedUnits = (): Record<UnitType, boolean> => ({
   GOLEM: false,
   BLOOD_MAGE: false,
   BLOOD_GOBLIN: false,
+  HOBGOBLIN: false,
 });
 
 const createUnlockedBuildings = (): Record<BuildingType, boolean> => ({

@@ -3,7 +3,7 @@ export type Team = 'PLAYER' | 'ENEMY';
 export type CellZone = 'PLAYER' | 'NEUTRAL' | 'ENEMY';
 export type Race = 'HUMAN' | 'ORC';
 
-export type UnitType = 'KNIGHT' | 'ARCHER' | 'SNIPER' | 'MAGE' | 'GOLEM' | 'GOBLIN' | 'BLOOD_MAGE' | 'BLOOD_GOBLIN';
+export type UnitType = 'KNIGHT' | 'ARCHER' | 'SNIPER' | 'MAGE' | 'GOLEM' | 'GOBLIN' | 'BLOOD_MAGE' | 'BLOOD_GOBLIN' | 'HOBGOBLIN';
 export type BuildingType = 'GOLD_MINE' | 'GOBLIN_CAVE' | 'ARCHER_TOWER';
 export type PlacementKind = 'UNIT' | 'BUILDING';
 
@@ -39,6 +39,10 @@ export interface UnitBlueprint {
   summonOnly?: boolean;
   allyDamageBonusRadius?: number;
   allyDamageBonusPerUnit?: number;
+  allyMaxHpBonusRadius?: number;
+  allyMaxHpBonusPerUnit?: number;
+  goblinDeathHpBonusRadius?: number;
+  goblinDeathHpBonusPerDeath?: number;
   footprint?: { width: number; height: number };
   placementFootprint?: { width: number; height: number };
   spawnOffsets?: CellCoord[];
@@ -78,6 +82,7 @@ export interface UnitState {
   inactiveMsRemaining: number;
   xp: number;
   tier: number;
+  roundHpBonusPct: number;
 }
 
 export interface BuildingState {

@@ -124,7 +124,7 @@ const pickCellForType = (
   const open = cells.filter(c => isAnchorValidForPlayer(state, unitType, c));
   if (open.length === 0) return null;
   const preferences: RowBand[] =
-    unitType === 'KNIGHT' || unitType === 'GOLEM' || unitType === 'GOBLIN'
+    unitType === 'KNIGHT' || unitType === 'GOLEM' || unitType === 'GOBLIN' || unitType === 'HOBGOBLIN'
       ? ['front', 'mid', 'back']
       : unitType === 'ARCHER' || unitType === 'SNIPER'
         ? ['mid', 'back', 'front']
@@ -165,6 +165,7 @@ const createUnitCountRecord = (): Record<UnitType, number> => ({
   MAGE: 0,
   BLOOD_MAGE: 0,
   GOLEM: 0,
+  HOBGOBLIN: 0,
 });
 
 const pickWeightedType = (weights: Record<UnitType, number>, choices: UnitType[], rand: () => number): UnitType => {
@@ -189,6 +190,7 @@ const buildWeights = (state: GameState, rand: () => number): Record<UnitType, nu
     MAGE: 1,
     BLOOD_MAGE: 1,
     GOLEM: 1,
+    HOBGOBLIN: 1,
   };
   const goblinMageCounterWeight = 0.12;
 

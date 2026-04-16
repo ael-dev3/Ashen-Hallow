@@ -9,6 +9,7 @@ export const XP_REWARD: Record<UnitType, number> = {
   MAGE: 3,
   BLOOD_MAGE: 3,
   GOLEM: 4,
+  HOBGOBLIN: 2,
 };
 
 export const XP_BASE_REQUIREMENT: Record<UnitType, number> = {
@@ -20,6 +21,7 @@ export const XP_BASE_REQUIREMENT: Record<UnitType, number> = {
   MAGE: 3,
   BLOOD_MAGE: 3,
   GOLEM: 4,
+  HOBGOBLIN: 2,
 };
 
 export const xpRequiredForTier = (unitType: UnitType, tier: number): number => {

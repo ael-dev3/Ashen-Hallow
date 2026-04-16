@@ -70,6 +70,36 @@ const getUnitAttackDamage = (unit: UnitState, allies: readonly UnitState[]): num
   return baseDamage * (1 + nearbyAllies * bonusPerUnit);
 };
 
+const getUnitMaxHpMultiplier = (unit: UnitState, allies: readonly UnitState[]): number => {
+  const blueprint = getUnitBlueprint(unit.type);
+  let bonusPct = unit.roundHpBonusPct ?? 0;
+  const allyRadius = blueprint.allyMaxHpBonusRadius ?? 0;
+  const allyPerUnit = blueprint.allyMaxHpBonusPerUnit ?? 0;
+  if (allyRadius > 0 && allyPerUnit > 0) {
+    const unitCenter = getUnitCenter(unit);
+    const nearbyAllies = allies.filter(ally => {
+      if (ally.id === unit.id) return false;
+      return ally.type === unit.type && chebyshev(unitCenter, getUnitCenter(ally)) <= allyRadius;
+    }).length;
+    bonusPct += nearbyAllies * allyPerUnit;
+  }
+  return 1 + bonusPct;
+};
+
+const applyUnitHpBonuses = (units: readonly UnitState[]): UnitState[] => {
+  return units.map(unit => {
+    const allies = units.filter(other => other.team === unit.team);
+    const baseMaxHp = getUnitStats(unit.type, unit.tier).maxHp;
+    const targetMaxHp = baseMaxHp * getUnitMaxHpMultiplier(unit, allies);
+    const hpDelta = targetMaxHp - unit.maxHp;
+    return {
+      ...unit,
+      maxHp: targetMaxHp,
+      hp: Math.min(targetMaxHp, Math.max(0, unit.hp + hpDelta)),
+    };
+  });
+};
+
 const isUnitWithinAttackRange = (attacker: UnitState, target: UnitState): boolean => {
   const blueprint = getUnitBlueprint(attacker.type);
   const attackerCenter = getUnitCenter(attacker);
@@ -267,12 +297,15 @@ export const stepBattle = (params: {
   knightArcherHits: number;
   knightMageHits: number;
 } => {
-  const alive = params.units.filter(u => u.hp > 0).map(u => ({
-    ...u,
-    attackCooldownMs: Math.max(0, u.attackCooldownMs - params.deltaMs),
-    moveCooldownMs: Math.max(0, u.moveCooldownMs - params.deltaMs),
-    inactiveMsRemaining: Math.max(0, u.inactiveMsRemaining - params.deltaMs),
-  }));
+  const alive = applyUnitHpBonuses(
+    params.units.filter(u => u.hp > 0).map(u => ({
+      ...u,
+      attackCooldownMs: Math.max(0, u.attackCooldownMs - params.deltaMs),
+      moveCooldownMs: Math.max(0, u.moveCooldownMs - params.deltaMs),
+      inactiveMsRemaining: Math.max(0, u.inactiveMsRemaining - params.deltaMs),
+      roundHpBonusPct: u.roundHpBonusPct ?? 0,
+    }))
+  );
 
   const aliveBuildings = params.buildings.filter(b => b.hp > 0).map(b => ({
     ...b,
@@ -522,12 +555,26 @@ export const stepBattle = (params: {
     .filter(u => u.hp > 0);
 
   const deadUnits = alive.filter(unit => !afterAttacks.some(survivor => survivor.id === unit.id));
-  const bloodMages = afterAttacks.filter(unit => getUnitBlueprint(unit.type).spawnsOnDeathsInRange);
+  let afterDeathBuffs = afterAttacks.map(unit => ({ ...unit }));
+  for (const deadUnit of deadUnits) {
+    if (!isGoblinPackUnitType(deadUnit.type)) continue;
+    afterDeathBuffs = afterDeathBuffs.map(unit => {
+      const blueprint = getUnitBlueprint(unit.type);
+      const deathBonusRadius = blueprint.goblinDeathHpBonusRadius ?? 0;
+      const deathBonusPerDeath = blueprint.goblinDeathHpBonusPerDeath ?? 0;
+      if (deathBonusRadius <= 0 || deathBonusPerDeath <= 0) return unit;
+      if (chebyshev(getUnitCenter(unit), getUnitCenter(deadUnit)) > deathBonusRadius) return unit;
+      return { ...unit, roundHpBonusPct: (unit.roundHpBonusPct ?? 0) + deathBonusPerDeath };
+    });
+  }
+  afterDeathBuffs = applyUnitHpBonuses(afterDeathBuffs);
+
+  const bloodMages = afterDeathBuffs.filter(unit => getUnitBlueprint(unit.type).spawnsOnDeathsInRange);
   let nextSpawnId = alive.reduce((maxId, unit) => Math.max(maxId, unit.id), 0) + 1;
   const spawnedUnitsFromDeaths: UnitState[] = [];
 
   const occupiedAfterAttacks = new Map<string, string>();
-  for (const unit of afterAttacks) {
+  for (const unit of afterDeathBuffs) {
     const footprint = getUnitFootprint(unit.type);
     for (let dy = 0; dy < footprint.height; dy++) {
       for (let dx = 0; dx < footprint.width; dx++) {
@@ -582,7 +629,7 @@ export const stepBattle = (params: {
     }
   }
 
-  const unitsAfterSpawns = [...afterAttacks, ...spawnedUnitsFromDeaths];
+  const unitsAfterSpawns = [...afterDeathBuffs, ...spawnedUnitsFromDeaths];
   const aliveIdsAfterAttacks = new Set<number>(unitsAfterSpawns.map(u => u.id));
   const afterAttacksById = new Map<number, UnitState>(unitsAfterSpawns.map(u => [u.id, u]));
 

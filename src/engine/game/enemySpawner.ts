@@ -28,6 +28,7 @@ const createUnitCountRecord = (): Record<UnitType, number> => ({
   MAGE: 0,
   BLOOD_MAGE: 0,
   GOLEM: 0,
+  HOBGOBLIN: 0,
 });
 
 export const spawnEnemyUnits = (params: {
@@ -252,6 +253,7 @@ export const spawnEnemyUnits = (params: {
     MAGE: 1,
     BLOOD_MAGE: 1,
     GOLEM: 1,
+    HOBGOBLIN: 1,
   };
   const goblinMageCounterWeight = 0.12;
 
@@ -316,7 +318,7 @@ export const spawnEnemyUnits = (params: {
     if (anchors.length === 0) return null;
     shuffleInPlace(anchors);
     const preferences: Array<'front' | 'mid' | 'back'> =
-      type === 'KNIGHT' || type === 'GOLEM' || type === 'GOBLIN' || type === 'BLOOD_GOBLIN'
+      type === 'KNIGHT' || type === 'GOLEM' || type === 'GOBLIN' || type === 'BLOOD_GOBLIN' || type === 'HOBGOBLIN'
         ? ['front', 'mid', 'back']
         : type === 'ARCHER' || type === 'BLOOD_MAGE'
           ? ['mid', 'back', 'front']
