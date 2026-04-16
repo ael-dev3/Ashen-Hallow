@@ -1,6 +1,7 @@
 import type { BuildingState, GridState, Team, UnitState } from './types';
 import {
   createUnit,
+  getPlacementOffsets,
   getUnitBlueprint,
   getUnitCenter,
   getUnitFootprint,
@@ -161,6 +162,55 @@ const canOccupyAnchor = (
     }
   }
   return true;
+};
+
+const findNearestOpenSpawnAnchor = (
+  grid: GridState,
+  unit: UnitState,
+  origin: { x: number; y: number },
+  occupiedByKey: ReadonlyMap<string, string>
+): { x: number; y: number } | null => {
+  const anchors: Array<{ x: number; y: number; dist: number }> = [];
+  for (let y = 0; y < grid.rows; y++) {
+    for (let x = 0; x < grid.cols; x++) {
+      anchors.push({ x, y, dist: manhattan(origin, { x, y }) });
+    }
+  }
+
+  anchors.sort((a, b) => a.dist - b.dist || a.y - b.y || a.x - b.x);
+  for (const anchor of anchors) {
+    if (!canOccupyAnchor(grid, unit, anchor, occupiedByKey)) continue;
+    return { x: anchor.x, y: anchor.y };
+  }
+
+  return null;
+};
+
+const spawnUnitNearOrigin = (params: {
+  grid: GridState;
+  occupiedByKey: Map<string, string>;
+  unitType: UnitState['type'];
+  origin: { x: number; y: number };
+  team: Team;
+  tier: number;
+  nextSpawnId: number;
+}): UnitState | null => {
+  const prototype = createUnit({
+    id: params.nextSpawnId,
+    team: params.team,
+    type: params.unitType,
+    x: params.origin.x,
+    y: params.origin.y,
+    xp: 0,
+    tier: params.tier,
+  });
+  const anchor = findNearestOpenSpawnAnchor(params.grid, prototype, params.origin, params.occupiedByKey);
+  if (!anchor) return null;
+  const spawn = { ...prototype, x: anchor.x, y: anchor.y };
+  for (const cell of getUnitFootprintCells(spawn.type, anchor)) {
+    params.occupiedByKey.set(keyOf(cell.x, cell.y), `unit:${spawn.id}`);
+  }
+  return spawn;
 };
 
 const getMoveStepToward = (
@@ -474,7 +524,7 @@ export const stepBattle = (params: {
   const deadUnits = alive.filter(unit => !afterAttacks.some(survivor => survivor.id === unit.id));
   const bloodMages = afterAttacks.filter(unit => getUnitBlueprint(unit.type).spawnsOnDeathsInRange);
   let nextSpawnId = alive.reduce((maxId, unit) => Math.max(maxId, unit.id), 0) + 1;
-  const spawnedBloodGoblins: UnitState[] = [];
+  const spawnedUnitsFromDeaths: UnitState[] = [];
 
   const occupiedAfterAttacks = new Map<string, string>();
   for (const unit of afterAttacks) {
@@ -494,27 +544,45 @@ export const stepBattle = (params: {
     }
   }
 
+  for (const deadUnit of deadUnits) {
+    if (deadUnit.type !== 'GOLEM') continue;
+    const goblinSquadSize = getPlacementOffsets('GOBLIN').length;
+    for (let i = 0; i < goblinSquadSize; i++) {
+      const spawn = spawnUnitNearOrigin({
+        grid: params.grid,
+        occupiedByKey: occupiedAfterAttacks,
+        unitType: 'GOBLIN',
+        origin: { x: deadUnit.x, y: deadUnit.y },
+        team: deadUnit.team,
+        tier: deadUnit.tier,
+        nextSpawnId,
+      });
+      if (!spawn) break;
+      spawnedUnitsFromDeaths.push(spawn);
+      nextSpawnId += 1;
+    }
+  }
+
   for (const bloodMage of bloodMages) {
     for (const deadUnit of deadUnits) {
       if (deadUnit.type === 'BLOOD_GOBLIN') continue;
       if (!isUnitWithinAttackRange(bloodMage, deadUnit)) continue;
-      const spawnCellKey = keyOf(deadUnit.x, deadUnit.y);
-      if (occupiedAfterAttacks.has(spawnCellKey)) continue;
-      const spawn = createUnit({
-        id: nextSpawnId++,
+      const spawn = spawnUnitNearOrigin({
+        grid: params.grid,
+        occupiedByKey: occupiedAfterAttacks,
+        unitType: 'BLOOD_GOBLIN',
+        origin: { x: deadUnit.x, y: deadUnit.y },
         team: bloodMage.team,
-        type: 'BLOOD_GOBLIN',
-        x: deadUnit.x,
-        y: deadUnit.y,
-        xp: 0,
         tier: deadUnit.tier,
+        nextSpawnId,
       });
-      spawnedBloodGoblins.push(spawn);
-      occupiedAfterAttacks.set(spawnCellKey, `unit:${spawn.id}`);
+      if (!spawn) continue;
+      spawnedUnitsFromDeaths.push(spawn);
+      nextSpawnId += 1;
     }
   }
 
-  const unitsAfterSpawns = [...afterAttacks, ...spawnedBloodGoblins];
+  const unitsAfterSpawns = [...afterAttacks, ...spawnedUnitsFromDeaths];
   const aliveIdsAfterAttacks = new Set<number>(unitsAfterSpawns.map(u => u.id));
   const afterAttacksById = new Map<number, UnitState>(unitsAfterSpawns.map(u => [u.id, u]));
 

@@ -304,13 +304,6 @@ export class GameScreen implements Screen {
 
     for (const unitType of getRaceUnitTypes(options.race)) {
       const blueprint = getUnitBlueprint(unitType);
-      const aoeText = blueprint.aoeRadius ? `, AOE ${blueprint.aoeRadius}` : '';
-      const footprint = getPlacementFootprint(unitType);
-      const squadSize = getPlacementOffsets(unitType).length;
-      const sizeText = footprint.width > 1 || footprint.height > 1 ? ` Size ${footprint.width}x${footprint.height}.` : '';
-      const squadText = squadSize > 1 ? ` Squad x${squadSize}.` : '';
-      const moveSpeed = getUnitMoveSpeed(unitType);
-      const moveSpeedText = moveSpeed.toFixed(2);
       const button = new Button({
         text: `${blueprint.name}`,
         variant: 'ghost',
@@ -318,7 +311,7 @@ export class GameScreen implements Screen {
       });
       this.tooltipUnsubs.push(
         this.tooltip.bind(button.getElement(), {
-          text: `${blueprint.name}: Unlock ${blueprint.unlockCost}g (once). Place ${blueprint.placementCost}g. HP ${blueprint.maxHp}, ATK ${blueprint.attackDamage}, RNG ${blueprint.attackRange}${aoeText}, MOV ${moveSpeedText}.${sizeText}${squadText}`,
+          text: this.buildUnitTooltipText(unitType),
         })
       );
       unitRow.appendChild(button.getElement());
@@ -976,6 +969,28 @@ export class GameScreen implements Screen {
       this.upgradeAllTooltipUnsub();
     }
     this.upgradeAllTooltipUnsub = this.tooltip.bind(this.upgradeAllBtn.getElement(), { text });
+  }
+
+  private buildUnitTooltipText(unitType: UnitType): string {
+    const blueprint = getUnitBlueprint(unitType);
+    const aoeText = blueprint.aoeRadius ? `, AOE ${blueprint.aoeRadius}` : '';
+    const footprint = getPlacementFootprint(unitType);
+    const squadSize = getPlacementOffsets(unitType).length;
+    const sizeText = footprint.width > 1 || footprint.height > 1 ? ` Size ${footprint.width}x${footprint.height}.` : '';
+    const squadText = squadSize > 1 ? ` Squad x${squadSize}.` : '';
+    const moveSpeed = getUnitMoveSpeed(unitType);
+    const moveSpeedText = moveSpeed.toFixed(2);
+
+    let mechanicText = '';
+    if (unitType === 'BLOOD_MAGE') {
+      mechanicText = ' Hits every unit in range, and each non-Blood-Goblin death in range spawns 1 Blood Goblin per Blood Mage in range at the nearest open tile.';
+    } else if (unitType === 'GOLEM') {
+      mechanicText = ' On death, it bursts into a full Goblin Squad around its death location.';
+    } else if (unitType === 'GOBLIN') {
+      mechanicText = ' Gains +10% ATK per nearby Goblin or Blood Goblin within 10 tiles.';
+    }
+
+    return `${blueprint.name}: Unlock ${blueprint.unlockCost}g (once). Place ${blueprint.placementCost}g. HP ${blueprint.maxHp}, ATK ${blueprint.attackDamage}, RNG ${blueprint.attackRange}${aoeText}, MOV ${moveSpeedText}.${sizeText}${squadText}${mechanicText}`;
   }
 
   private buildBuildingTooltipText(buildingType: BuildingType, state?: GameState): string {

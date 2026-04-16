@@ -287,7 +287,7 @@ runTest('race selection limits the player roster for humans and orcs', () => {
   assertOk(!orcTowerUnlockAttempt.unlockedBuildings.ARCHER_TOWER, 'Orcs should not be able to unlock Archer Tower.');
 });
 
-runTest('blood mage attacks all units in range and spawns blood goblins from nearby deaths', () => {
+runTest('blood mage attacks all units in range', () => {
   const initial = createInitialGameState('ORC', 'HUMAN');
   const bloodMage = {
     ...createUnit({ id: 1, team: 'PLAYER', type: 'BLOOD_MAGE', x: 10, y: 10 }),
@@ -315,17 +315,90 @@ runTest('blood mage attacks all units in range and spawns blood goblins from nea
     deltaMs: 100,
   });
 
-  assertOk(
-    !result.units.some(unit => unit.id === alliedGoblin.id),
-    'Blood Mage should damage allied units in range too.'
-  );
-  assertOk(
-    !result.units.some(unit => unit.id === enemyKnight.id),
-    'Blood Mage should damage enemy units in range too.'
-  );
+  assertOk(!result.units.some(unit => unit.id === alliedGoblin.id), 'Blood Mage should damage allied units in range too.');
+  assertOk(!result.units.some(unit => unit.id === enemyKnight.id), 'Blood Mage should damage enemy units in range too.');
+});
 
+runTest('each blood mage in range spawns blood goblins into nearest open cells for a death in range', () => {
+  const initial = createInitialGameState('ORC', 'HUMAN');
+  const bloodMageA = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'BLOOD_MAGE', x: 10, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const bloodMageB = {
+    ...createUnit({ id: 2, team: 'PLAYER', type: 'BLOOD_MAGE', x: 14, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const bloodMageC = {
+    ...createUnit({ id: 3, team: 'PLAYER', type: 'BLOOD_MAGE', x: 12, y: 14 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const doomedKnight = {
+    ...createUnit({ id: 4, team: 'ENEMY', type: 'KNIGHT', x: 12, y: 10 }),
+    hp: 1,
+    maxHp: 16,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const killerGoblin = {
+    ...createUnit({ id: 5, team: 'PLAYER', type: 'GOBLIN', x: 11, y: 10 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [bloodMageA, bloodMageB, bloodMageC, doomedKnight, killerGoblin],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  assertOk(!result.units.some(unit => unit.id === doomedKnight.id), 'The target unit should die in the setup.');
   const spawnedBloodGoblins = result.units.filter(unit => unit.type === 'BLOOD_GOBLIN');
-  assertEqual(spawnedBloodGoblins.length, 2, 'Blood Mage should spawn one Blood Goblin per nearby non-blood-goblin death in range.');
+  assertEqual(spawnedBloodGoblins.length, 3, 'A single death with three Blood Mages in range should create three Blood Goblins.');
+  assertEqual(
+    new Set(spawnedBloodGoblins.map(unit => `${unit.x},${unit.y}`)).size,
+    3,
+    'Blood Goblins from the same death should occupy distinct nearest open cells.'
+  );
+  assertOk(
+    spawnedBloodGoblins.every(unit => Math.abs(unit.x - doomedKnight.x) + Math.abs(unit.y - doomedKnight.y) <= 1),
+    'Blood Goblins should use the nearest open cells around the death location.'
+  );
+});
+
+runTest('golem death spawns a goblin squad around its death location', () => {
+  const initial = createInitialGameState('ORC', 'HUMAN');
+  const doomedGolem = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'GOLEM', x: 10, y: 10 }),
+    hp: 1,
+    maxHp: 32,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyMage = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'MAGE', x: 11, y: 11 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [doomedGolem, enemyMage],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  assertOk(!result.units.some(unit => unit.id === doomedGolem.id), 'The golem should die in the setup.');
+  const spawnedGoblins = result.units.filter(unit => unit.type === 'GOBLIN' && unit.team === 'PLAYER');
+  assertEqual(spawnedGoblins.length, 6, 'A dead golem should spawn a full Goblin Squad.');
+  assertOk(
+    spawnedGoblins.every(unit => Math.abs(unit.x - doomedGolem.x) + Math.abs(unit.y - doomedGolem.y) <= 3),
+    'Spawned goblins should appear around the golem death location.'
+  );
 });
 
 console.log('[done] gameplay regression scenarios passed');
