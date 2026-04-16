@@ -483,6 +483,7 @@ export const stepBattle = (params: {
     const currentZone = zoneOf(params.grid, unit);
     const enemyZoneCounts = zoneCounts[unit.team === 'PLAYER' ? 'ENEMY' : 'PLAYER'];
     const shouldStageToNeutral =
+      target.kind !== 'BUILDING' &&
       neutralCenterY !== null &&
       currentZone !== 'NEUTRAL' &&
       enemyZoneCounts.NEUTRAL === 0 &&

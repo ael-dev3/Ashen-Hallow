@@ -292,6 +292,28 @@ runTest('human AI favors archer towers and mages in a ranged gameplan', () => {
   assertOk(result.enemyDeployments.some(unit => unit.type === 'MAGE'), 'Human AI should lean toward recruiting Mages in this matchup.');
 });
 
+runTest('units move directly toward an archer tower instead of stalling into neutral staging', () => {
+  const initial = createInitialGameState('ORC', 'HUMAN');
+  const playerKnight = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'KNIGHT', x: 0, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 0,
+  };
+  const enemyTower = createBuilding({ id: 2, team: 'ENEMY', type: 'ARCHER_TOWER', x: 10, y: 10, tier: 1, upgradeReady: true });
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [playerKnight],
+    buildings: [enemyTower],
+    deltaMs: 100,
+  });
+
+  const nextKnight = result.units.find(unit => unit.id === playerKnight.id);
+  assertOk(!!nextKnight, 'Knight should still be alive after the first movement tick.');
+  assertOk((nextKnight?.x ?? 0) > playerKnight.x, 'Units should advance toward the Archer Tower horizontally when it is the only target.');
+  assertEqual(nextKnight?.y ?? 0, playerKnight.y, 'Units should not drift into neutral staging when pathing to a lone building.');
+});
+
 runTest('archer tower damages enemies in range during battle', () => {
   const initial = createInitialGameState('HUMAN', 'ORC');
   const tower = createBuilding({ id: 1, team: 'PLAYER', type: 'ARCHER_TOWER', x: 10, y: 10, tier: 1, upgradeReady: true });
