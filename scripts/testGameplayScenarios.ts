@@ -1,5 +1,5 @@
 import { GAME_CONFIG } from '../src/engine/config/gameConfig';
-import { getBuildingBlueprint } from '../src/engine/game/buildingCatalog';
+import { createBuilding, getBuildingBlueprint } from '../src/engine/game/buildingCatalog';
 import { spawnEnemyUnits } from '../src/engine/game/enemySpawner';
 import { isPlayerDeployableCell } from '../src/engine/game/grid';
 import { createInitialGameState } from '../src/engine/game/initialState';
@@ -283,6 +283,41 @@ runTest('human AI favors archer towers and mages in a ranged gameplan', () => {
   const enemyBuildings = result.buildings.filter(building => building.team === 'ENEMY');
   assertOk(enemyBuildings.some(building => building.type === 'ARCHER_TOWER'), 'Human AI should prefer building an Archer Tower when playing a ranged defensive plan.');
   assertOk(result.enemyDeployments.some(unit => unit.type === 'MAGE'), 'Human AI should lean toward recruiting Mages in this matchup.');
+});
+
+runTest('archer tower damages enemies in range during battle', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const tower = createBuilding({ id: 1, team: 'PLAYER', type: 'ARCHER_TOWER', x: 10, y: 10, tier: 1, upgradeReady: true });
+  const enemyGoblin = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'GOBLIN', x: 11, y: 11 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [enemyGoblin],
+    buildings: [tower],
+    deltaMs: 100,
+  });
+
+  const damagedGoblin = result.units.find(unit => unit.id === enemyGoblin.id);
+  assertOk(!damagedGoblin, 'Archer Tower should kill a tier-1 goblin in range.');
+});
+
+runTest('archer tower upgrade increases damage and max hp', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const upgraded = gameReducer({
+    ...initial,
+    phase: 'INTERMISSION',
+    gold: 10,
+    buildings: [createBuilding({ id: 1, team: 'PLAYER', type: 'ARCHER_TOWER', x: 10, y: 10, tier: 1, upgradeReady: true })],
+  }, { type: 'UPGRADE_BUILDING', buildingType: 'ARCHER_TOWER' });
+
+  const tower = upgraded.buildings.find(building => building.type === 'ARCHER_TOWER' && building.team === 'PLAYER');
+  assertOk(!!tower, 'Archer Tower should still exist after upgrading.');
+  assertEqual(tower?.tier ?? 0, 2, 'Archer Tower should level up to tier 2.');
+  assertEqual(tower?.maxHp ?? 0, 200, 'Archer Tower max HP should scale with tier.');
 });
 
 runTest('building placement does not consume unit placement slots', () => {
