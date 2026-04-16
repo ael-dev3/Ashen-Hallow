@@ -8,8 +8,9 @@
 }
 
 .screen--start .btn--start {
-  min-width: min(360px, 80vw);
+  width: min(360px, 100%);
   min-height: 84px;
+  margin: 0;
   padding: 20px 28px;
   font-size: 22px;
   font-weight: 700;
@@ -29,14 +30,19 @@
 }
 
 .screen--start .btn--showcase {
-  min-width: min(320px, 80vw);
+  width: min(360px, 100%);
   min-height: 60px;
+  margin: 0;
   padding: 14px 24px;
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.08em;
   border-radius: 16px;
   text-transform: uppercase;
+}
+
+.screen--start .btn--menu-back {
+  margin-top: 6px;
 }
 
 .screen--game {
@@ -86,8 +92,14 @@
 
 .menu__actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  margin-top: var(--space-2);
   gap: var(--space-2);
+}
+
+.menu__actions--stack {
+  justify-items: center;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .menu__sound {
