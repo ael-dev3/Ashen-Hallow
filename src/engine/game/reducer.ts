@@ -39,6 +39,7 @@ import {
 } from './unitCatalog';
 import { addXp, xpRequiredForTier, toRoman } from './xp';
 import { isBuildingAvailableForRace, isUnitAvailableForRace } from './races';
+import { getDeploymentUpgradeGroup } from './upgrades';
 
 const goldForTurn = (turn: number): number => Math.max(2, turn);
 
@@ -473,11 +474,6 @@ const getUnitHpDamageWeight = (unitType: UnitType): number => {
 };
 
 const getUnitUpgradeCost = (unitType: UnitType): number => getUnitBlueprint(unitType).placementCost;
-
-const getDeploymentUpgradeGroup = (deployments: readonly DeploymentUnit[], deployment: DeploymentUnit): DeploymentUnit[] => {
-  if (deployment.type !== 'GOBLIN' || deployment.squadId === undefined) return [deployment];
-  return deployments.filter(candidate => candidate.type === deployment.type && candidate.squadId === deployment.squadId);
-};
 
 const getHpDamageByTeam = (units: readonly UnitState[], team: Team): number =>
   units.reduce((sum, unit) => {

@@ -326,6 +326,10 @@ export const spawnEnemyUnits = (params: {
     });
 
   const preferredBuildingOrder = [...enemyBuildingTypes].sort((a, b) => {
+    if (params.enemyRace === 'HUMAN') {
+      if (params.turn >= 4 && a === 'ARCHER_TOWER') return -1;
+      if (params.turn >= 4 && b === 'ARCHER_TOWER') return 1;
+    }
     if (a === 'GOLD_MINE' && (buildingCounts.get(a) ?? 0) === 0) return -1;
     if (b === 'GOLD_MINE' && (buildingCounts.get(b) ?? 0) === 0) return 1;
     return getBuildingBlueprint(a).placementCost - getBuildingBlueprint(b).placementCost;
@@ -357,6 +361,11 @@ export const spawnEnemyUnits = (params: {
     HOBGOBLIN: 1,
   };
   const goblinMageCounterWeight = 0.12;
+  if (params.enemyRace === 'HUMAN') {
+    weights.MAGE += 4.5;
+    weights.ARCHER += 1.2;
+    weights.SNIPER = Math.max(0.4, weights.SNIPER - 0.35);
+  }
 
   let mostCommon: UnitType = allTypes[0] ?? 'KNIGHT';
   let mostCommonCount = -1;

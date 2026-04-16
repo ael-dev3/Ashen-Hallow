@@ -7,6 +7,7 @@ import { gameReducer } from '../src/engine/game/reducer';
 import { stepBattle } from '../src/engine/game/simulateBattle';
 import { createUnit, getUnitBlueprint } from '../src/engine/game/unitCatalog';
 import { xpRequiredForTier } from '../src/engine/game/xp';
+import { getUpgradeAllSummary } from '../src/engine/game/upgrades';
 import type { CellCoord, DeploymentUnit, GameState } from '../src/engine/game/types';
 
 const fail = (message: string): never => {
@@ -218,7 +219,6 @@ runTest('enemy AI can place one race-legal building and does not stack extras im
     'Enemy AI should not keep adding extra buildings once it already has one on board.'
   );
 });
-
 runTest('goblin upgrades cost 1g per squad and upgrade the whole squad together', () => {
   const initial = createInitialGameState('ORC', 'HUMAN');
   const unlocked = gameReducer(initial, { type: 'SELECT_UNIT', unitType: 'GOBLIN' });
@@ -226,8 +226,9 @@ runTest('goblin upgrades cost 1g per squad and upgrade the whole squad together'
   const readyXp = xpRequiredForTier('GOBLIN', 1);
   const readyState: GameState = {
     ...placed,
+    phase: 'INTERMISSION',
     gold: 1,
-    deployments: placed.deployments.map(d => ({ ...d, xp: readyXp })),
+    deployments: placed.deployments.map(d => ({ ...d, xp: readyXp, tier: d.tier ?? 1 })),
     units: placed.units.map(u => ({ ...u, xp: readyXp })),
   };
 
@@ -242,13 +243,46 @@ runTest('goblin upgrades cost 1g per squad and upgrade the whole squad together'
   const secondPlaced = gameReducer(firstPlaced, { type: 'PLACE_UNIT', cell: secondCell });
   const secondReady: GameState = {
     ...secondPlaced,
+    phase: 'INTERMISSION',
     gold: 2,
     deployments: secondPlaced.deployments.map(d => ({ ...d, xp: readyXp, tier: d.tier ?? 1 })),
     units: secondPlaced.units.map(u => ({ ...u, xp: readyXp, tier: u.tier ?? 1 })),
   };
+  const summary = getUpgradeAllSummary(secondReady);
+  assertEqual(summary.cost, 2, 'Upgrade All UI should charge once per Goblin Squad, not once per Goblin.');
+  assertEqual(summary.readyCount, 2, 'Upgrade All UI should count ready squads, not individual Goblins.');
   const upgradedAll = gameReducer(secondReady, { type: 'UPGRADE_ALL_UNITS' });
   assertEqual(upgradedAll.gold, 0, 'Two Goblin Squads should cost 2 gold total to upgrade.');
   assertOk(upgradedAll.deployments.every(d => (d.tier ?? 1) === 2), 'Upgrade All should level both goblin squads fully.');
+});
+
+runTest('human AI favors archer towers and mages in a ranged gameplan', () => {
+  const initial = createInitialGameState('ORC', 'HUMAN');
+  const result = spawnEnemyUnits({
+    grid: initial.grid,
+    playerUnits: [
+      createUnit({ id: 1, team: 'PLAYER', type: 'GOBLIN', x: 5, y: 12 }),
+      createUnit({ id: 2, team: 'PLAYER', type: 'GOBLIN', x: 6, y: 12 }),
+      createUnit({ id: 3, team: 'PLAYER', type: 'GOBLIN', x: 7, y: 12 }),
+      createUnit({ id: 4, team: 'PLAYER', type: 'GOLEM', x: 10, y: 12 }),
+    ],
+    buildings: [],
+    existingEnemyDeployments: [],
+    nextUnitId: 1,
+    nextBuildingId: 1,
+    rngSeed: 12345,
+    turn: 6,
+    enemyGoldDebtNextTurn: 0,
+    enemyGold: 15,
+    enemyUnlockedUnits: initial.enemyUnlockedUnits,
+    enemyPlacementSlots: 2,
+    enemyNextPlacementSlotCost: 2,
+    enemyRace: 'HUMAN',
+  });
+
+  const enemyBuildings = result.buildings.filter(building => building.team === 'ENEMY');
+  assertOk(enemyBuildings.some(building => building.type === 'ARCHER_TOWER'), 'Human AI should prefer building an Archer Tower when playing a ranged defensive plan.');
+  assertOk(result.enemyDeployments.some(unit => unit.type === 'MAGE'), 'Human AI should lean toward recruiting Mages in this matchup.');
 });
 
 runTest('building placement does not consume unit placement slots', () => {

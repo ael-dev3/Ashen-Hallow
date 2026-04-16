@@ -1,4 +1,5 @@
 import { GAME_CONFIG } from '../../../engine/config/gameConfig';
+import { getUpgradeAllSummary } from '../../../engine/game/upgrades';
 import type { GameAction } from '../../../engine/game/actions';
 import type { BuildingType, GameState, RoundUnitSummary, UnitType, CellCoord, Race } from '../../../engine/game/types';
 import { createInitialGameState } from '../../../engine/game/initialState';
@@ -948,18 +949,7 @@ export class GameScreen implements Screen {
   }
 
   private getUpgradeAllSummary(state: GameState): { cost: number; readyCount: number } {
-    let cost = 0;
-    let readyCount = 0;
-    for (const deployment of state.deployments) {
-      const currentTier = deployment.tier ?? 1;
-      const currentXp = deployment.xp ?? 0;
-      const requiredXp = xpRequiredForTier(deployment.type, currentTier);
-      if (currentXp < requiredXp) continue;
-      if (deployment.lastUpgradeTurn === state.turn) continue;
-      readyCount += 1;
-      cost += getUnitBlueprint(deployment.type).placementCost;
-    }
-    return { cost, readyCount };
+    return getUpgradeAllSummary(state);
   }
 
   private setUpgradeAllTooltip(text: string): void {
