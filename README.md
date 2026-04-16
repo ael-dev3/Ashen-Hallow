@@ -98,3 +98,7 @@ npm test
 
 - The original prototype remains untouched: https://github.com/ael-dev3/Mechabellum-prototype
 - Ashen-Hallow is the standalone rebuild and now diverges through race-based faction design, modular TypeScript systems, improved presentation, and new faction mechanics.
+
+## License
+
+This project is released under [The Unlicense](LICENSE), which places it in the public domain to the fullest extent allowed by law.
