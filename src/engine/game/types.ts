@@ -85,10 +85,14 @@ export interface UnitState {
   roundHpBonusPct: number;
   roundDamageBonusPct: number;
   roundKillBlows: number;
+  bleedStacks: number;
   bloodMageSpawnsCreated: number;
   mageBlinkUsed: boolean;
   isMirrorImage: boolean;
   statMultiplier: number;
+  oilFlaskUsed: boolean;
+  oilFlaskX: number | null;
+  oilFlaskY: number | null;
 }
 
 export interface BuildingState {

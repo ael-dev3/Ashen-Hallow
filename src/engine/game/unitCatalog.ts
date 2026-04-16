@@ -305,9 +305,13 @@ export const createUnit = (params: {
     roundHpBonusPct: 0,
     roundDamageBonusPct: 0,
     roundKillBlows: 0,
+    bleedStacks: 0,
     bloodMageSpawnsCreated: 0,
     mageBlinkUsed: false,
     isMirrorImage: false,
     statMultiplier: 1,
+    oilFlaskUsed: false,
+    oilFlaskX: null,
+    oilFlaskY: null,
   };
 };

@@ -18,6 +18,8 @@ const manhattan = (a: { x: number; y: number }, b: { x: number; y: number }): nu
   Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
 const BUILDING_HITBOX_PADDING = 0.35;
+const OIL_FLASK_RADIUS = 10;
+const OIL_FLASK_SLOW_MULTIPLIER = 0.4;
 
 const keyOf = (x: number, y: number): string => `${x},${y}`;
 
@@ -193,6 +195,17 @@ const getUnitTargetsInAttackRange = (unit: UnitState, enemies: readonly UnitStat
     });
 };
 
+const getOilFieldsForTeam = (units: readonly UnitState[], team: Team): Array<{ x: number; y: number }> =>
+  units
+    .filter(unit => unit.team === team && unit.type === 'ARCHER' && unit.oilFlaskUsed && unit.oilFlaskX !== null && unit.oilFlaskY !== null)
+    .map(unit => ({ x: unit.oilFlaskX as number, y: unit.oilFlaskY as number }));
+
+const getMoveSlowMultiplier = (unit: UnitState, oilFields: readonly { x: number; y: number }[]): number => {
+  if (oilFields.length === 0) return 1;
+  const center = getUnitCenter(unit);
+  return oilFields.some(field => chebyshev(center, field) <= OIL_FLASK_RADIUS) ? OIL_FLASK_SLOW_MULTIPLIER : 1;
+};
+
 const canOccupyAnchor = (
   grid: GridState,
   unit: UnitState,
@@ -316,20 +329,31 @@ export const stepBattle = (params: {
   knightArcherHits: number;
   knightMageHits: number;
 } => {
+  const playerOilFields = getOilFieldsForTeam(params.units, 'PLAYER');
+  const enemyOilFields = getOilFieldsForTeam(params.units, 'ENEMY');
+
   const alive = applyUnitHpBonuses(
-    params.units.filter(u => u.hp > 0).map(u => ({
-      ...u,
-      attackCooldownMs: Math.max(0, u.attackCooldownMs - params.deltaMs),
-      moveCooldownMs: Math.max(0, u.moveCooldownMs - params.deltaMs),
-      inactiveMsRemaining: Math.max(0, u.inactiveMsRemaining - params.deltaMs),
-      roundHpBonusPct: u.roundHpBonusPct ?? 0,
-      roundDamageBonusPct: u.roundDamageBonusPct ?? 0,
-      roundKillBlows: u.roundKillBlows ?? 0,
-      bloodMageSpawnsCreated: u.bloodMageSpawnsCreated ?? 0,
-      mageBlinkUsed: u.mageBlinkUsed ?? false,
-      isMirrorImage: u.isMirrorImage ?? false,
-      statMultiplier: u.statMultiplier ?? 1,
-    }))
+    params.units.filter(u => u.hp > 0).map(u => {
+      const enemyOil = u.team === 'PLAYER' ? enemyOilFields : playerOilFields;
+      const moveSlowMultiplier = getMoveSlowMultiplier(u, enemyOil);
+      return {
+        ...u,
+        attackCooldownMs: Math.max(0, u.attackCooldownMs - params.deltaMs),
+        moveCooldownMs: Math.max(0, u.moveCooldownMs - params.deltaMs * moveSlowMultiplier),
+        inactiveMsRemaining: Math.max(0, u.inactiveMsRemaining - params.deltaMs),
+        roundHpBonusPct: u.roundHpBonusPct ?? 0,
+        roundDamageBonusPct: u.roundDamageBonusPct ?? 0,
+        roundKillBlows: u.roundKillBlows ?? 0,
+        bleedStacks: u.bleedStacks ?? 0,
+        bloodMageSpawnsCreated: u.bloodMageSpawnsCreated ?? 0,
+        mageBlinkUsed: u.mageBlinkUsed ?? false,
+        isMirrorImage: u.isMirrorImage ?? false,
+        statMultiplier: u.statMultiplier ?? 1,
+        oilFlaskUsed: u.oilFlaskUsed ?? false,
+        oilFlaskX: u.oilFlaskX ?? null,
+        oilFlaskY: u.oilFlaskY ?? null,
+      };
+    })
   );
 
   const aliveBuildings = params.buildings.filter(b => b.hp > 0).map(b => ({
@@ -373,6 +397,7 @@ export const stepBattle = (params: {
   const attacks: AttackIntent[] = [];
   const moves: MoveIntent[] = [];
   const buildingsThatAttacked = new Set<number>();
+  const oilFlaskDrops = new Map<number, { x: number; y: number }>();
 
   const considerUnit = (
     unit: UnitState,
@@ -390,6 +415,10 @@ export const stepBattle = (params: {
     const dist =
       blueprint.attackDistance === 'CHEBYSHEV' ? chebyshev(unitCenter, targetCenter) : manhattan(unitCenter, targetCenter);
     const inRange = dist <= blueprint.attackRange;
+    if (unit.type === 'ARCHER' && target.kind === 'UNIT' && inRange && !unit.oilFlaskUsed && !oilFlaskDrops.has(unit.id)) {
+      oilFlaskDrops.set(unit.id, { x: target.unit.x, y: target.unit.y });
+    }
+
     const canAttack = inRange && unit.attackCooldownMs === 0;
 
     if (canAttack) {
@@ -543,6 +572,13 @@ export const stepBattle = (params: {
   }
 
   const attackedByAttacker = new Set(attacks.filter(a => a.attackerKind === 'UNIT').map(a => a.attackerId));
+  const knightBleedStacksAdded = new Map<number, number>();
+  for (const attack of attacks) {
+    if (attack.attackerKind !== 'UNIT' || attack.defenderKind !== 'UNIT') continue;
+    const defender = unitsById.get(attack.defenderId);
+    if (defender?.type !== 'KNIGHT') continue;
+    knightBleedStacksAdded.set(attack.attackerId, (knightBleedStacksAdded.get(attack.attackerId) ?? 0) + 1);
+  }
   const xpGains = new Map<number, number>();
   const humanKillBlowCounts = new Map<number, number>();
 
@@ -581,14 +617,28 @@ export const stepBattle = (params: {
   const afterAttacks = alive
     .map(u => {
       const totalDamage = damageByDefender.get(u.id) ?? 0;
-      const hp = Math.max(0, u.hp - totalDamage);
       const attackCooldownMs = attackedByAttacker.has(u.id) ? getUnitBlueprint(u.type).attackCooldownMs : u.attackCooldownMs;
       const gainedXp = xpGains.get(u.id) ?? 0;
       const xp = addXp(u.xp, gainedXp, u.type, u.tier);
       const killBlowsThisStep = humanKillBlowCounts.get(u.id) ?? 0;
       const roundDamageBonusPct = (u.roundDamageBonusPct ?? 0) + killBlowsThisStep * 0.01;
       const roundKillBlows = (u.roundKillBlows ?? 0) + killBlowsThisStep;
-      return { ...u, hp, attackCooldownMs, xp, roundDamageBonusPct, roundKillBlows };
+      const bleedStacks = (u.bleedStacks ?? 0) + (knightBleedStacksAdded.get(u.id) ?? 0);
+      const bleedDamage = u.maxHp * 0.01 * bleedStacks * (params.deltaMs / 1000);
+      const hp = Math.max(0, u.hp - totalDamage - bleedDamage);
+      const oilFlaskDrop = oilFlaskDrops.get(u.id);
+      return {
+        ...u,
+        hp,
+        attackCooldownMs,
+        xp,
+        roundDamageBonusPct,
+        roundKillBlows,
+        bleedStacks,
+        oilFlaskUsed: u.oilFlaskUsed || !!oilFlaskDrop,
+        oilFlaskX: oilFlaskDrop?.x ?? u.oilFlaskX,
+        oilFlaskY: oilFlaskDrop?.y ?? u.oilFlaskY,
+      };
     })
     .filter(u => u.hp > 0);
 
@@ -686,10 +736,14 @@ export const stepBattle = (params: {
         roundHpBonusPct: blinkedMage.roundHpBonusPct,
         roundDamageBonusPct: blinkedMage.roundDamageBonusPct,
         roundKillBlows: blinkedMage.roundKillBlows,
+        bleedStacks: blinkedMage.bleedStacks,
         bloodMageSpawnsCreated: blinkedMage.bloodMageSpawnsCreated,
         mageBlinkUsed: true,
         isMirrorImage: true,
         statMultiplier: 0.1,
+        oilFlaskUsed: false,
+        oilFlaskX: null,
+        oilFlaskY: null,
       });
       nextSpawnId += 1;
     }
@@ -788,11 +842,12 @@ export const stepBattle = (params: {
   const movedUnits = unitsAfterSpawns.map(u => {
     const winner = winners.get(u.id);
     if (!winner) return u;
+    const enemyOilFieldsAfterSpawns = getOilFieldsForTeam(unitsAfterSpawns, u.team === 'PLAYER' ? 'ENEMY' : 'PLAYER');
+    const movedUnit = { ...u, x: winner.toX, y: winner.toY };
+    const moveSlowMultiplier = getMoveSlowMultiplier(movedUnit, enemyOilFieldsAfterSpawns);
     return {
-      ...u,
-      x: winner.toX,
-      y: winner.toY,
-      moveCooldownMs: getUnitMoveCooldownMs(u.type),
+      ...movedUnit,
+      moveCooldownMs: getUnitMoveCooldownMs(u.type) / moveSlowMultiplier,
     };
   });
 

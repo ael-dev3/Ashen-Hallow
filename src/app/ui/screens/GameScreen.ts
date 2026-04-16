@@ -982,12 +982,14 @@ export class GameScreen implements Screen {
     const moveSpeedText = moveSpeed.toFixed(2);
 
     let mechanicText = '';
-    if (unitType === 'ARCHER') {
-      mechanicText = ' Gains +1% round ATK per killing blow, and each kill lets this Archer hit 1 additional enemy in range for the rest of the round.';
+    if (unitType === 'KNIGHT') {
+      mechanicText = ' Units that hit this Knight gain stacking bleed for the rest of the round, taking 1% max HP per second per stack.';
+    } else if (unitType === 'ARCHER') {
+      mechanicText = ' On first contact, drops an oil flask on its target that slows enemy movement by 60% in a 10-tile radius. Also gains +1% round ATK per killing blow, and each kill lets this Archer hit 1 additional enemy in range for the rest of the round.';
     } else if (unitType === 'MAGE') {
       mechanicText = ' On the first hit it receives each round, it blinks 5 tiles backward and creates 4 mirror images with 10% of its stats.';
     } else if (unitType === 'BLOOD_MAGE') {
-      mechanicText = ' Hits every unit in range, and each non-Blood-Goblin death in range spawns 1 Blood Goblin per Blood Mage in range at the nearest open tile.';
+      mechanicText = ' Hits every unit in range, and each non-Blood-Goblin death in range spawns 1 Blood Goblin per Blood Mage in range at the nearest open tile. The battlefield now shows its crimson influence radius.';
     } else if (unitType === 'GOLEM') {
       mechanicText = ' On death, it bursts into a full Goblin Squad around its death location.';
     } else if (unitType === 'GOBLIN') {

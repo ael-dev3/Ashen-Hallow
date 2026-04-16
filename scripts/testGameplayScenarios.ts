@@ -682,6 +682,87 @@ runTest('mage blinks backward on first hit and creates four 10% mirror images', 
   );
 });
 
+runTest('knight applies stacking end-of-round bleed to attackers that hit it', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const knight = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'KNIGHT', x: 10, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyArcher = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'ARCHER', x: 10, y: 12 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+
+  const firstStep = stepBattle({
+    grid: initial.grid,
+    units: [knight, enemyArcher],
+    buildings: [],
+    deltaMs: 1000,
+  });
+
+  const firstBleedingArcher = firstStep.units.find(unit => unit.id === enemyArcher.id);
+  assertOk(!!firstBleedingArcher, 'The archer should survive the first bleed tick.');
+  assertEqual(firstBleedingArcher?.bleedStacks ?? 0, 1, 'A unit that hits a Knight should gain one bleed stack.');
+  assertEqual(firstBleedingArcher?.hp ?? 0, 7.92, 'First bleed stack should deal 1% max HP over one second.');
+
+  const secondStep = stepBattle({
+    grid: initial.grid,
+    units: [knight, { ...firstBleedingArcher!, attackCooldownMs: 0 }],
+    buildings: [],
+    deltaMs: 1000,
+  });
+
+  const secondBleedingArcher = secondStep.units.find(unit => unit.id === enemyArcher.id);
+  assertOk(!!secondBleedingArcher, 'The archer should survive the second bleed tick.');
+  assertEqual(secondBleedingArcher?.bleedStacks ?? 0, 2, 'Repeated hits on a Knight should stack bleed.');
+  assertEqual(secondBleedingArcher?.hp ?? 0, 7.76, 'Second hit should raise bleed to 2% max HP per second.');
+});
+
+runTest('archer drops an oil flask the first time an enemy enters range and slows movement in the area', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const archer = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'ARCHER', x: 10, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyKnight = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'KNIGHT', x: 10, y: 13 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyGoblin = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'GOBLIN', x: 10, y: 14 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 0,
+  };
+
+  const firstStep = stepBattle({
+    grid: initial.grid,
+    units: [archer, enemyKnight, enemyGoblin],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const oilArcher = firstStep.units.find(unit => unit.id === archer.id);
+  assertOk(!!oilArcher, 'The archer should survive the setup.');
+  assertOk(oilArcher?.oilFlaskUsed, 'The archer should drop its oil flask on first contact.');
+  assertEqual(oilArcher?.oilFlaskX ?? -1, 10, 'The oil flask should land on the first target x-position.');
+  assertEqual(oilArcher?.oilFlaskY ?? -1, 13, 'The oil flask should land on the first target y-position.');
+
+  const secondStep = stepBattle({
+    grid: initial.grid,
+    units: firstStep.units.map(unit => (unit.id === enemyGoblin.id ? { ...unit, moveCooldownMs: 0 } : unit)),
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const slowedGoblin = secondStep.units.find(unit => unit.id === enemyGoblin.id);
+  assertOk(!!slowedGoblin, 'The goblin should survive the oil-slow setup.');
+  assertOk((slowedGoblin?.moveCooldownMs ?? 0) > 93, 'Units moving through the oil field should receive a stronger movement cooldown.');
+});
+
 runTest('golem death spawns a goblin squad around its death location', () => {
   const initial = createInitialGameState('ORC', 'HUMAN');
   const doomedGolem = {

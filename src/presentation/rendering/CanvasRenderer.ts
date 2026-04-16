@@ -268,6 +268,8 @@ export class CanvasRenderer {
       this.drawBuilding(layout, building);
     }
 
+    this.drawOilFlaskFields(state, layout);
+
     // Units
     const canModifyDeployments = (state.phase === 'DEPLOYMENT' || state.phase === 'INTERMISSION') && !state.matchResult;
     const deploymentById = canModifyDeployments ? new Map(state.deployments.map(d => [d.id, d])) : null;
@@ -280,6 +282,8 @@ export class CanvasRenderer {
       const radius = Math.max(8, footprintPx * radiusScale);
       const hpPct = unit.maxHp > 0 ? Math.max(0, Math.min(1, unit.hp / unit.maxHp)) : 0;
       const isInactive = unit.inactiveMsRemaining > 0;
+
+      this.drawUnitAbilityEffects(state, layout, unit, center, radius);
 
       ctx.save();
       ctx.globalAlpha = unit.isMirrorImage ? 0.65 : 1;
@@ -407,6 +411,128 @@ export class CanvasRenderer {
     this.ctx.strokeStyle = strokeStyle;
     this.ctx.lineWidth = 2;
     this.ctx.strokeRect(left + 1, top + 1, layout.cellSizePx - 2, layout.cellSizePx - 2);
+  }
+
+  private drawUnitAbilityEffects(
+    state: GameState,
+    layout: GridLayout,
+    unit: GameState['units'][number],
+    center: { x: number; y: number },
+    radius: number
+  ): void {
+    const ctx = this.ctx;
+    const pulse = state.battleTimeMs / 1000;
+
+    if (unit.type === 'ARCHER') {
+      if (unit.oilFlaskUsed) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(214, 137, 16, 0.65)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius + 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if ((unit.roundKillBlows ?? 0) > 0) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(245, 176, 65, 0.55)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius + 5 + Math.min(10, unit.roundKillBlows * 2), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    if (unit.type === 'KNIGHT') {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(215, 195, 195, 0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (unit.type === 'MAGE') {
+      ctx.save();
+      if (unit.mageBlinkUsed) {
+        const glow = 0.35 + 0.15 * Math.sin(pulse * 8);
+        ctx.fillStyle = `rgba(139, 123, 216, ${glow})`;
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius + 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (unit.isMirrorImage) {
+        ctx.strokeStyle = 'rgba(210, 228, 255, 0.55)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if (unit.type === 'BLOOD_MAGE') {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(159, 34, 53, 0.28)';
+      ctx.lineWidth = Math.max(1, layout.cellSizePx * 0.08);
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, layout.cellSizePx * 10, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (unit.type === 'GOBLIN' || unit.type === 'BLOOD_GOBLIN') {
+      ctx.save();
+      ctx.strokeStyle = unit.type === 'GOBLIN' ? 'rgba(122, 199, 122, 0.22)' : 'rgba(159, 34, 53, 0.22)';
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius + 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (unit.bleedStacks > 0) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(185, 28, 28, 0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius + 8 + Math.min(8, unit.bleedStacks), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (unit.type === 'HOBGOBLIN') {
+      ctx.save();
+      const hpPulse = 0.2 + 0.08 * Math.sin(pulse * 5 + unit.id);
+      ctx.fillStyle = `rgba(111, 31, 31, ${hpPulse})`;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius + 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  private drawOilFlaskFields(state: GameState, layout: GridLayout): void {
+    for (const unit of state.units) {
+      if (unit.type !== 'ARCHER' || !unit.oilFlaskUsed || unit.oilFlaskX === null || unit.oilFlaskY === null) continue;
+      const center = this.cellToCanvasCenterWithLayout(layout, { x: unit.oilFlaskX, y: unit.oilFlaskY });
+      const radius = layout.cellSizePx * 10;
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.fillStyle = 'rgba(120, 73, 10, 0.16)';
+      ctx.strokeStyle = 'rgba(214, 137, 16, 0.32)';
+      ctx.lineWidth = Math.max(1, layout.cellSizePx * 0.08);
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   private drawFlankOverlays(state: GameState, layout: GridLayout): void {
