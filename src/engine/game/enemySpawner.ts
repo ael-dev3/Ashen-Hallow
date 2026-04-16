@@ -1,4 +1,4 @@
-import type { BuildingState, DeploymentUnit, GridState, UnitState, UnitType } from './types';
+import type { BuildingState, BuildingType, DeploymentUnit, GridState, UnitState, UnitType } from './types';
 import {
   createUnit,
   getCounterUnitType,
@@ -7,11 +7,11 @@ import {
   getUnitBlueprint,
   getUnitFootprint,
 } from './unitCatalog';
-import { getBuildingFootprint } from './buildingCatalog';
+import { createBuilding, getBuildingBlueprint, getBuildingFootprint } from './buildingCatalog';
 import { isEnemyDeployableCell, isPlayerFlankCell } from './grid';
 import { GAME_CONFIG } from '../config/gameConfig';
 import { addXp, xpRequiredForTier } from './xp';
-import { getRaceUnitTypes } from './races';
+import { getRaceBuildingTypes, getRaceUnitTypes } from './races';
 
 interface EnemyPlacement {
   type: UnitType;
@@ -37,6 +37,7 @@ export const spawnEnemyUnits = (params: {
   buildings: readonly BuildingState[];
   existingEnemyDeployments: readonly DeploymentUnit[];
   nextUnitId: number;
+  nextBuildingId: number;
   rngSeed: number;
   turn: number;
   enemyGoldDebtNextTurn: number;
@@ -48,7 +49,9 @@ export const spawnEnemyUnits = (params: {
 }): {
   enemyUnits: UnitState[];
   enemyDeployments: DeploymentUnit[];
+  buildings: BuildingState[];
   nextUnitId: number;
+  nextBuildingId: number;
   nextSeed: number;
   nextEnemyGoldDebtNextTurn: number;
   nextEnemyGold: number;
@@ -57,12 +60,14 @@ export const spawnEnemyUnits = (params: {
   nextEnemyNextPlacementSlotCost: number;
 } => {
   const enemyUnits: UnitState[] = [];
+  const nextBuildings: BuildingState[] = [...params.buildings];
   const enemyDeployments: DeploymentUnit[] = params.existingEnemyDeployments.map(d => ({
     ...d,
     xp: d.xp ?? 0,
     tier: d.tier ?? 1,
   }));
   let nextUnitId = params.nextUnitId;
+  let nextBuildingId = params.nextBuildingId;
   let seed = params.rngSeed;
   const unlockedUnits: Record<UnitType, boolean> = { ...params.enemyUnlockedUnits };
   let placementSlots = params.enemyPlacementSlots;
@@ -180,6 +185,52 @@ export const spawnEnemyUnits = (params: {
     return anchors;
   };
 
+  const isBuildingAnchorValid = (
+    buildingType: BuildingType,
+    anchor: { x: number; y: number },
+    occupiedKeys: ReadonlySet<string>
+  ): boolean => {
+    const footprint = getBuildingFootprint(buildingType);
+    for (let dy = 0; dy < footprint.height; dy++) {
+      for (let dx = 0; dx < footprint.width; dx++) {
+        const x = anchor.x + dx;
+        const y = anchor.y + dy;
+        if (x < 0 || x >= params.grid.cols || y < 0 || y >= params.grid.rows) return false;
+        if (
+          !isEnemyDeployableCell(
+            params.grid,
+            { x, y },
+            params.turn,
+            GAME_CONFIG.flankColsPerSide,
+            GAME_CONFIG.flankUnlockTurn
+          )
+        ) {
+          return false;
+        }
+        if (occupiedKeys.has(keyOf(x, y))) return false;
+      }
+    }
+    return true;
+  };
+
+  const getAnchorsForBuilding = (
+    buildingType: BuildingType,
+    occupiedKeys: ReadonlySet<string> = occupied
+  ): Array<{ x: number; y: number }> => {
+    const footprint = getBuildingFootprint(buildingType);
+    const anchors: Array<{ x: number; y: number }> = [];
+    const maxX = params.grid.cols - footprint.width;
+    const maxY = params.grid.rows - footprint.height;
+    for (let y = 0; y <= maxY; y++) {
+      for (let x = 0; x <= maxX; x++) {
+        const anchor = { x, y };
+        if (!isBuildingAnchorValid(buildingType, anchor, occupiedKeys)) continue;
+        anchors.push(anchor);
+      }
+    }
+    return anchors;
+  };
+
   const openEnemyCells: Array<{ x: number; y: number }> = [];
   let minEnemyY = Number.POSITIVE_INFINITY;
   let maxEnemyY = Number.NEGATIVE_INFINITY;
@@ -242,6 +293,56 @@ export const spawnEnemyUnits = (params: {
   };
 
   applyEnemyUpgrades();
+
+  const enemyBuildingTypes = getRaceBuildingTypes(params.enemyRace);
+  const buildingCounts = new Map<BuildingType, number>();
+  for (const building of nextBuildings) {
+    if (building.team !== 'ENEMY') continue;
+    buildingCounts.set(building.type, (buildingCounts.get(building.type) ?? 0) + 1);
+  }
+
+  const placeEnemyBuilding = (buildingType: BuildingType, anchor: { x: number; y: number }): void => {
+    const building = createBuilding({
+      id: nextBuildingId++,
+      team: 'ENEMY',
+      type: buildingType,
+      x: anchor.x,
+      y: anchor.y,
+    });
+    nextBuildings.push(building);
+    addBuildingToOccupied(building);
+    buildingCounts.set(buildingType, (buildingCounts.get(buildingType) ?? 0) + 1);
+  };
+
+  const affordableBuildingTypes = (): BuildingType[] =>
+    enemyBuildingTypes.filter(buildingType => {
+      const blueprint = getBuildingBlueprint(buildingType);
+      const maxCount = blueprint.maxCount ?? Number.POSITIVE_INFINITY;
+      if ((buildingCounts.get(buildingType) ?? 0) >= maxCount) return false;
+      if (blueprint.placementCost > availableGold) return false;
+      const goldAfterBuild = availableGold - blueprint.placementCost;
+      if (enemyDeployments.length === 0 && goldAfterBuild < minIncrementalCost) return false;
+      return getAnchorsForBuilding(buildingType).length > 0;
+    });
+
+  const preferredBuildingOrder = [...enemyBuildingTypes].sort((a, b) => {
+    if (a === 'GOLD_MINE' && (buildingCounts.get(a) ?? 0) === 0) return -1;
+    if (b === 'GOLD_MINE' && (buildingCounts.get(b) ?? 0) === 0) return 1;
+    return getBuildingBlueprint(a).placementCost - getBuildingBlueprint(b).placementCost;
+  });
+
+  let buildingPlacementsRemaining = 1;
+  while (buildingPlacementsRemaining > 0) {
+    const affordable = affordableBuildingTypes();
+    if (affordable.length === 0) break;
+    const picked = preferredBuildingOrder.find(type => affordable.includes(type)) ?? affordable[0];
+    const anchors = getAnchorsForBuilding(picked);
+    if (anchors.length === 0) break;
+    const anchor = anchors[Math.floor(nextRand() * anchors.length)];
+    availableGold -= getBuildingBlueprint(picked).placementCost;
+    placeEnemyBuilding(picked, anchor);
+    buildingPlacementsRemaining -= 1;
+  }
 
   const weights: Record<UnitType, number> = {
     ...createUnitCountRecord(),
@@ -505,8 +606,10 @@ export const spawnEnemyUnits = (params: {
 
   return {
     enemyUnits,
-    nextUnitId,
     enemyDeployments,
+    buildings: nextBuildings,
+    nextUnitId,
+    nextBuildingId,
     nextSeed: seed,
     nextEnemyGoldDebtNextTurn,
     nextEnemyGold: availableGold,

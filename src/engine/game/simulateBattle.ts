@@ -9,6 +9,7 @@ import {
   getUnitMoveCooldownMs,
   getUnitStats,
   isGoblinPackUnitType,
+  isHumanUnitType,
 } from './unitCatalog';
 import { getBuildingAttackStats, getBuildingCenter, getBuildingFootprint, getBuildingStats } from './buildingCatalog';
 import { addXp, XP_REWARD } from './xp';
@@ -67,7 +68,8 @@ const getUnitAttackDamage = (unit: UnitState, allies: readonly UnitState[]): num
     return (samePack || ally.type === unit.type) && chebyshev(unitCenter, getUnitCenter(ally)) <= bonusRadius;
   }).length;
 
-  return baseDamage * (1 + nearbyAllies * bonusPerUnit);
+  const packDamage = baseDamage * (1 + nearbyAllies * bonusPerUnit);
+  return packDamage * (1 + (unit.roundDamageBonusPct ?? 0));
 };
 
 const getUnitMaxHpMultiplier = (unit: UnitState, allies: readonly UnitState[]): number => {
@@ -304,6 +306,8 @@ export const stepBattle = (params: {
       moveCooldownMs: Math.max(0, u.moveCooldownMs - params.deltaMs),
       inactiveMsRemaining: Math.max(0, u.inactiveMsRemaining - params.deltaMs),
       roundHpBonusPct: u.roundHpBonusPct ?? 0,
+      roundDamageBonusPct: u.roundDamageBonusPct ?? 0,
+      bloodMageSpawnsCreated: u.bloodMageSpawnsCreated ?? 0,
     }))
   );
 
@@ -370,8 +374,7 @@ export const stepBattle = (params: {
     if (canAttack) {
       const attackDamage = getUnitAttackDamage(unit, allies);
       if (blueprint.attacksAllUnitsInRange) {
-        for (const otherUnit of alive) {
-          if (otherUnit.id === unit.id) continue;
+        for (const otherUnit of enemies) {
           if (!isUnitWithinAttackRange(unit, otherUnit)) continue;
           attacks.push({
             attackerId: unit.id,
@@ -514,6 +517,7 @@ export const stepBattle = (params: {
 
   const attackedByAttacker = new Set(attacks.filter(a => a.attackerKind === 'UNIT').map(a => a.attackerId));
   const xpGains = new Map<number, number>();
+  const humanKillBlowCounts = new Map<number, number>();
 
   for (const [defenderId, defenderAttacks] of attacksByDefender) {
     const defender = alive.find(u => u.id === defenderId);
@@ -530,6 +534,10 @@ export const stepBattle = (params: {
     if (killerId === null) continue;
     const gain = XP_REWARD[defender.type];
     xpGains.set(killerId, (xpGains.get(killerId) ?? 0) + gain);
+    const killer = unitsById.get(killerId);
+    if (killer && isHumanUnitType(killer.type)) {
+      humanKillBlowCounts.set(killerId, (humanKillBlowCounts.get(killerId) ?? 0) + 1);
+    }
   }
 
   const afterBuildingAttacks = aliveBuildings
@@ -550,7 +558,8 @@ export const stepBattle = (params: {
       const attackCooldownMs = attackedByAttacker.has(u.id) ? getUnitBlueprint(u.type).attackCooldownMs : u.attackCooldownMs;
       const gainedXp = xpGains.get(u.id) ?? 0;
       const xp = addXp(u.xp, gainedXp, u.type, u.tier);
-      return { ...u, hp, attackCooldownMs, xp };
+      const roundDamageBonusPct = (u.roundDamageBonusPct ?? 0) + (humanKillBlowCounts.get(u.id) ?? 0) * 0.01;
+      return { ...u, hp, attackCooldownMs, xp, roundDamageBonusPct };
     })
     .filter(u => u.hp > 0);
 
@@ -569,7 +578,10 @@ export const stepBattle = (params: {
   }
   afterDeathBuffs = applyUnitHpBonuses(afterDeathBuffs);
 
-  const bloodMages = afterDeathBuffs.filter(unit => getUnitBlueprint(unit.type).spawnsOnDeathsInRange);
+  const bloodMages = alive.filter(unit => getUnitBlueprint(unit.type).spawnsOnDeathsInRange);
+  const bloodMageSpawnCounts = new Map<number, number>(
+    bloodMages.map(unit => [unit.id, unit.bloodMageSpawnsCreated ?? 0])
+  );
   let nextSpawnId = alive.reduce((maxId, unit) => Math.max(maxId, unit.id), 0) + 1;
   const spawnedUnitsFromDeaths: UnitState[] = [];
 
@@ -625,9 +637,35 @@ export const stepBattle = (params: {
       });
       if (!spawn) continue;
       spawnedUnitsFromDeaths.push(spawn);
+      bloodMageSpawnCounts.set(bloodMage.id, (bloodMageSpawnCounts.get(bloodMage.id) ?? 0) + 1);
       nextSpawnId += 1;
     }
   }
+
+  for (const deadUnit of deadUnits) {
+    if (deadUnit.type !== 'BLOOD_MAGE') continue;
+    const explosionCount = (bloodMageSpawnCounts.get(deadUnit.id) ?? 0) * 2;
+    for (let i = 0; i < explosionCount; i++) {
+      const spawn = spawnUnitNearOrigin({
+        grid: params.grid,
+        occupiedByKey: occupiedAfterAttacks,
+        unitType: 'BLOOD_GOBLIN',
+        origin: { x: deadUnit.x, y: deadUnit.y },
+        team: deadUnit.team,
+        tier: deadUnit.tier,
+        nextSpawnId,
+      });
+      if (!spawn) break;
+      spawnedUnitsFromDeaths.push(spawn);
+      nextSpawnId += 1;
+    }
+  }
+
+  afterDeathBuffs = afterDeathBuffs.map(unit =>
+    unit.type === 'BLOOD_MAGE'
+      ? { ...unit, bloodMageSpawnsCreated: bloodMageSpawnCounts.get(unit.id) ?? unit.bloodMageSpawnsCreated }
+      : unit
+  );
 
   const unitsAfterSpawns = [...afterDeathBuffs, ...spawnedUnitsFromDeaths];
   const aliveIdsAfterAttacks = new Set<number>(unitsAfterSpawns.map(u => u.id));

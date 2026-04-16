@@ -246,6 +246,9 @@ export const getCounterUnitType = (unitType: UnitType): UnitType => {
 
 export const isGoblinPackUnitType = (unitType: UnitType): boolean => unitType === 'GOBLIN' || unitType === 'BLOOD_GOBLIN';
 
+export const isHumanUnitType = (unitType: UnitType): boolean =>
+  unitType === 'KNIGHT' || unitType === 'ARCHER' || unitType === 'SNIPER' || unitType === 'MAGE';
+
 export const getUnitStats = (unitType: UnitType, tier: number): { maxHp: number; attackDamage: number } => {
   const blueprint = getUnitBlueprint(unitType);
   const safeTier = Math.max(1, Math.floor(tier));
@@ -300,5 +303,7 @@ export const createUnit = (params: {
     xp: params.xp ?? 0,
     tier: params.tier ?? 1,
     roundHpBonusPct: 0,
+    roundDamageBonusPct: 0,
+    bloodMageSpawnsCreated: 0,
   };
 };

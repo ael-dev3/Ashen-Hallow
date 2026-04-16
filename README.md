@@ -1,39 +1,37 @@
 # Ashen-Hallow
 
-Ashen-Hallow is a browser-based fantasy autobattler built in TypeScript and designed for GitHub Pages deployment. Inspired by early Mechabellum-style prototype gameplay, it has been rebuilt into a more focused standalone strategy game with a darker sacred-horror identity, cleaner UI, modular systems, and mobile-friendly play.
+Ashen-Hallow is a browser-based fantasy autobattler built with TypeScript and deployed on GitHub Pages. Originally inspired by an early Mechabellum-style prototype, the project has been rebuilt as a standalone strategy game with modular systems, faction-based rosters, persistent round-to-round army growth, and a darker crimson sacred-horror identity.
 
 **Live game:** https://ael-dev3.github.io/Ashen-Hallow/  
 **Current version:** `v0.0.02`
 
 ## Overview
 
-In Ashen-Hallow, players prepare a warhost on a grid, invest gold into new units and structures, and then watch rounds resolve through automatic combat. Placements persist across rounds, so every unlock, upgrade, and positioning choice shapes the long-term flow of the match.
+Ashen-Hallow is designed around quick strategic preparation followed by automatic combat resolution. Players build a warhost over multiple rounds, balancing economy, positioning, upgrades, and faction identity while adapting to the opposing army.
 
-The game is structured around fast strategic decisions:
-- choose a race at match start
-- unlock units and buildings over time
-- expand your battlefield presence across multiple rounds
-- counter the opposing army’s composition
-- scale through upgrades, synergies, and economic choices
+Each match revolves around a simple but expandable loop:
+- choose a faction at the start of the game
+- unlock units and buildings with gold
+- position forces on a grid-based battlefield
+- carry surviving forces and structures into future rounds
+- scale through upgrades, synergies, and economic momentum
+- defeat the enemy warhost before your own side collapses
 
-## Core Gameplay
+## Core Gameplay Pillars
 
-Ashen-Hallow combines several layers of autobattler strategy:
-- **grid-based deployment** for pre-battle positioning
-- **persistent armies** that carry between rounds
-- **gold-based progression** for unlocks, placements, and economy
-- **unit XP and upgrades** that reward surviving and performing units
-- **building support** for income and battlefield pressure
-- **AI opposition** with race-based rosters and automated deployment logic
-
-The goal is to create an army that snowballs efficiently while adapting to the enemy’s composition and momentum.
+- **Autobattler combat** — battles resolve automatically once preparation ends
+- **Persistent army building** — units and structures remain relevant across rounds
+- **Grid deployment** — pre-battle placement matters as much as composition
+- **Faction identity** — Humans and Orcs field distinct rosters and strategic tools
+- **Economy and upgrades** — gold, structures, XP, and timing decisions shape long-term advantage
+- **AI opposition** — the enemy drafts the opposite faction, deploys armies, and places buildings as part of its strategy
 
 ## Factions
 
-Every match begins with a faction choice. The player selects a race, and the AI fields its own race-based army.
+Every match begins with a faction choice. The AI automatically takes the opposite faction to create clearer asymmetry and matchup variety.
 
 ### Humans
-Humans focus on disciplined ranged pressure and classic fantasy frontline control.
+Humans emphasize disciplined ranged pressure, conventional battlefield control, and scaling through steady tactical efficiency.
 
 **Units**
 - Knight
@@ -46,7 +44,7 @@ Humans focus on disciplined ranged pressure and classic fantasy frontline contro
 - Archer Tower
 
 ### Orcs
-Orcs focus on swarm pressure, brutal board presence, death triggers, and chaotic momentum.
+Orcs emphasize swarm pressure, death-trigger mechanics, brute force, and chaotic momentum through aggressive board presence.
 
 **Units**
 - Goblin Squad
@@ -60,20 +58,21 @@ Orcs focus on swarm pressure, brutal board presence, death triggers, and chaotic
 
 ## Visual Direction
 
-Ashen-Hallow is being developed around a distinct crimson, blood-lit, sacred-horror atmosphere rather than a generic web-app aesthetic. The project aims for a stronger “game” presentation through:
-- darker, moodier battlefield surfaces
-- crimson-led faction accents
-- cleaner, more intentional UI framing
-- reduced reliance on generic gradient-heavy styling
-- a haunted fantasy tone that feels more ritualistic and warlike
+Ashen-Hallow is being shaped around a distinct crimson, blood-lit, sacred-horror presentation rather than a generic web-app look. The project direction focuses on:
+- darker and moodier battlefield surfaces
+- crimson-led accents and harsher contrast
+- cleaner UI framing with a stronger game-like feel
+- less generic gradient-heavy styling
+- a haunting fantasy atmosphere built around ritual, warfare, and decay
 
 ## Technical Highlights
 
-- **TypeScript-first architecture**
-- **modular gameplay systems** for engine, app, and presentation layers
-- **Vite-based web build**
-- **GitHub Actions + GitHub Pages** deployment pipeline
-- **mobile-friendly layout** designed for touch and portrait-friendly play
+- **TypeScript-first codebase**
+- **Modular architecture** across engine, app, and presentation layers
+- **Vite-based frontend build pipeline**
+- **GitHub Actions + GitHub Pages deployment**
+- **Mobile-friendly layout** tuned for smaller screens and touch interaction
+- **Regression-tested gameplay systems** for core battle and faction mechanics
 
 ## Development
 
@@ -94,10 +93,10 @@ npm run build
 npm test
 ```
 
-## Project Notes
+## Repository Notes
 
-- The original prototype remains untouched: https://github.com/ael-dev3/Mechabellum-prototype
-- Ashen-Hallow is the standalone rebuild and now diverges through race-based faction design, modular TypeScript systems, improved presentation, and new faction mechanics.
+- Original prototype reference: https://github.com/ael-dev3/Mechabellum-prototype
+- Ashen-Hallow is the standalone rebuild and now diverges through faction-based design, improved AI behavior, modular TypeScript systems, and a dedicated visual direction.
 
 ## License
 

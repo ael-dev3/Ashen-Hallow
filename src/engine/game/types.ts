@@ -83,6 +83,8 @@ export interface UnitState {
   xp: number;
   tier: number;
   roundHpBonusPct: number;
+  roundDamageBonusPct: number;
+  bloodMageSpawnsCreated: number;
 }
 
 export interface BuildingState {

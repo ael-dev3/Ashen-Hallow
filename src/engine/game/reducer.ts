@@ -332,7 +332,9 @@ const skipBattleWithoutUnits = (state: GameState): GameState => {
   const {
     enemyUnits,
     enemyDeployments,
+    buildings,
     nextUnitId,
+    nextBuildingId,
     nextSeed,
     nextEnemyGoldDebtNextTurn,
     nextEnemyGold,
@@ -345,6 +347,7 @@ const skipBattleWithoutUnits = (state: GameState): GameState => {
     buildings: state.buildings,
     existingEnemyDeployments: state.enemyDeployments,
     nextUnitId: state.nextUnitId,
+    nextBuildingId: state.nextBuildingId,
     rngSeed: state.rngSeed,
     turn: state.turn,
     enemyGoldDebtNextTurn: state.enemyGoldDebtNextTurn,
@@ -358,7 +361,9 @@ const skipBattleWithoutUnits = (state: GameState): GameState => {
   const nextState = {
     ...state,
     enemyDeployments,
+    buildings,
     nextUnitId,
+    nextBuildingId,
     rngSeed: nextSeed,
     enemyGoldDebtNextTurn: nextEnemyGoldDebtNextTurn,
     enemyGold: nextEnemyGold,
@@ -386,7 +391,9 @@ const startBattleFromCurrentDeployments = (state: GameState): GameState => {
   const {
     enemyUnits,
     enemyDeployments,
+    buildings: nextBuildings,
     nextUnitId,
+    nextBuildingId,
     nextSeed,
     nextEnemyGoldDebtNextTurn,
     nextEnemyGold,
@@ -399,6 +406,7 @@ const startBattleFromCurrentDeployments = (state: GameState): GameState => {
     buildings: state.buildings,
     existingEnemyDeployments: state.enemyDeployments,
     nextUnitId: state.nextUnitId,
+    nextBuildingId: state.nextBuildingId,
     rngSeed: state.rngSeed,
     turn: state.turn,
     enemyGoldDebtNextTurn: state.enemyGoldDebtNextTurn,
@@ -409,7 +417,7 @@ const startBattleFromCurrentDeployments = (state: GameState): GameState => {
     enemyRace: state.enemyRace,
   });
 
-  const buildings = prepareBuildingsForBattle(state.buildings);
+  const buildings = prepareBuildingsForBattle(nextBuildings);
 
   return {
     ...state,
@@ -417,6 +425,7 @@ const startBattleFromCurrentDeployments = (state: GameState): GameState => {
     units: [...playerUnits, ...enemyUnits],
     buildings,
     nextUnitId,
+    nextBuildingId,
     rngSeed: nextSeed,
     enemyGoldDebtNextTurn: nextEnemyGoldDebtNextTurn,
     enemyGold: nextEnemyGold,
@@ -455,10 +464,17 @@ const formatHpValue = (value: number): string => {
   return value.toFixed(2).replace(/\.?0+$/, '');
 };
 
+const getUnitSpawnCount = (unitType: UnitType): number => Math.max(1, getPlacementOffsets(unitType).length);
+
 const getUnitHpDamageWeight = (unitType: UnitType): number => {
   const blueprint = getUnitBlueprint(unitType);
-  const spawnCount = Math.max(1, getPlacementOffsets(unitType).length);
+  const spawnCount = getUnitSpawnCount(unitType);
   return blueprint.placementCost / spawnCount;
+};
+
+const getUnitUpgradeCost = (unitType: UnitType): number => {
+  const blueprint = getUnitBlueprint(unitType);
+  return blueprint.placementCost / getUnitSpawnCount(unitType);
 };
 
 const getHpDamageByTeam = (units: readonly UnitState[], team: Team): number =>
@@ -888,7 +904,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       }
 
       const blueprint = getUnitBlueprint(deployment.type);
-      const upgradeCost = blueprint.placementCost;
+      const upgradeCost = getUnitUpgradeCost(deployment.type);
       if (state.gold < upgradeCost) {
         return {
           ...state,
@@ -919,7 +935,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
 
       return {
         ...state,
-        gold: state.gold - upgradeCost,
+        gold: Math.round((state.gold - upgradeCost) * 100) / 100,
         deployments,
         units,
         message: { kind: 'success', text: `${blueprint.name} upgraded to Tier ${toRoman(nextTier)}.` },
@@ -940,7 +956,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         return { ...state, message: { kind: 'info', text: 'No units are ready to upgrade.' } };
       }
 
-      const totalCost = upgradeable.reduce((sum, d) => sum + getUnitBlueprint(d.type).placementCost, 0);
+      const totalCost = upgradeable.reduce((sum, d) => sum + getUnitUpgradeCost(d.type), 0);
       if (state.gold < totalCost) {
         return {
           ...state,
@@ -981,7 +997,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
 
       return {
         ...state,
-        gold: state.gold - totalCost,
+        gold: Math.round((state.gold - totalCost) * 100) / 100,
         deployments,
         units,
         message: { kind: 'success', text: `Upgraded ${upgradeable.length} unit${upgradeable.length === 1 ? '' : 's'}.` },

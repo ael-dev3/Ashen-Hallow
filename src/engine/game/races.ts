@@ -20,7 +20,5 @@ export const getDefaultUnitTypeForRace = (race: Race): UnitType => getRaceUnitTy
 
 export const getDefaultBuildingTypeForRace = (race: Race): BuildingType => getRaceBuildingTypes(race)[0] ?? 'GOLD_MINE';
 
-export const pickEnemyRace = (playerRace: Race, rand: number): Race => {
-  if (rand < 0.5) return playerRace === 'HUMAN' ? 'ORC' : 'HUMAN';
-  return playerRace;
-};
+export const pickEnemyRace = (playerRace: Race, _rand: number): Race =>
+  playerRace === 'HUMAN' ? 'ORC' : 'HUMAN';

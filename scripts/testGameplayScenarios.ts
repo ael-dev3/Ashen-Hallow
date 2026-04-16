@@ -6,6 +6,7 @@ import { createInitialGameState } from '../src/engine/game/initialState';
 import { gameReducer } from '../src/engine/game/reducer';
 import { stepBattle } from '../src/engine/game/simulateBattle';
 import { createUnit, getUnitBlueprint } from '../src/engine/game/unitCatalog';
+import { xpRequiredForTier } from '../src/engine/game/xp';
 import type { CellCoord, DeploymentUnit, GameState } from '../src/engine/game/types';
 
 const fail = (message: string): never => {
@@ -95,6 +96,7 @@ runTest('enemy mirror avoidance replaces a whole placement instead of spawning a
     buildings: [],
     existingEnemyDeployments: [],
     nextUnitId: 100,
+    nextBuildingId: 1,
     rngSeed: 2,
     turn: 3,
     enemyGoldDebtNextTurn: 0,
@@ -127,6 +129,7 @@ runTest('enemy AI can take a loan to create an opening deployment', () => {
     buildings: [],
     existingEnemyDeployments: [],
     nextUnitId: 1,
+    nextBuildingId: 1,
     rngSeed: 1,
     turn: 1,
     enemyGoldDebtNextTurn: 0,
@@ -149,6 +152,64 @@ runTest('enemy AI can take a loan to create an opening deployment', () => {
 
   assertOk(result.enemyDeployments.length > 0, 'Enemy loan should enable at least one opening placement.');
   assertEqual(result.nextEnemyGoldDebtNextTurn, 3, 'Enemy loan should schedule 3 gold debt for the next turn.');
+});
+
+runTest('enemy always chooses the opposite race', () => {
+  assertEqual(createInitialGameState('HUMAN').enemyRace, 'ORC', 'Human player should always face Orc enemy.');
+  assertEqual(createInitialGameState('ORC').enemyRace, 'HUMAN', 'Orc player should always face Human enemy.');
+});
+
+runTest('enemy AI can place race-legal buildings', () => {
+  const initial = createInitialGameState('HUMAN');
+  const result = spawnEnemyUnits({
+    grid: initial.grid,
+    playerUnits: [],
+    buildings: [],
+    existingEnemyDeployments: [],
+    nextUnitId: 1,
+    nextBuildingId: 1,
+    rngSeed: 7,
+    turn: 1,
+    enemyGoldDebtNextTurn: 0,
+    enemyGold: 3,
+    enemyUnlockedUnits: {
+      KNIGHT: false,
+      GOBLIN: false,
+      BLOOD_GOBLIN: false,
+      ARCHER: false,
+      SNIPER: false,
+      MAGE: false,
+      BLOOD_MAGE: false,
+      GOLEM: false,
+      HOBGOBLIN: false,
+    },
+    enemyPlacementSlots: 1,
+    enemyNextPlacementSlotCost: 2,
+    enemyRace: 'ORC',
+  });
+
+  assertOk(result.buildings.some(building => building.team === 'ENEMY'), 'Enemy AI should place at least one building when affordable.');
+  assertOk(
+    result.buildings.filter(building => building.team === 'ENEMY').every(building => building.type === 'GOLD_MINE' || building.type === 'GOBLIN_CAVE'),
+    'Enemy AI should only place buildings allowed by its race.'
+  );
+});
+
+runTest('goblin upgrades cost 1g per squad, not per goblin', () => {
+  const initial = createInitialGameState('ORC', 'HUMAN');
+  const unlocked = gameReducer(initial, { type: 'SELECT_UNIT', unitType: 'GOBLIN' });
+  const placed = gameReducer(unlocked, { type: 'PLACE_UNIT', cell: findFirstPlayerDeployableCell(unlocked) });
+  const readyXp = xpRequiredForTier('GOBLIN', 1);
+  const readyState: GameState = {
+    ...placed,
+    gold: 1,
+    deployments: placed.deployments.map(d => ({ ...d, xp: readyXp })),
+    units: placed.units.map(u => ({ ...u, xp: readyXp })),
+  };
+
+  const upgraded = gameReducer(readyState, { type: 'UPGRADE_ALL_UNITS' });
+  assertEqual(upgraded.gold, 0, 'Upgrading one Goblin Squad should cost exactly 1 gold total.');
+  assertOk(upgraded.deployments.every(d => (d.tier ?? 1) === 2), 'Every goblin in the squad should upgrade together when Upgrade All is used.');
 });
 
 runTest('building placement does not consume unit placement slots', () => {
@@ -346,7 +407,7 @@ runTest('hobgoblins gain max hp from nearby hobgoblins and goblin deaths in rang
   }
 });
 
-runTest('blood mage attacks all units in range', () => {
+runTest('blood mage attacks enemies in range without friendly fire', () => {
   const initial = createInitialGameState('ORC', 'HUMAN');
   const bloodMage = {
     ...createUnit({ id: 1, team: 'PLAYER', type: 'BLOOD_MAGE', x: 10, y: 10 }),
@@ -374,8 +435,8 @@ runTest('blood mage attacks all units in range', () => {
     deltaMs: 100,
   });
 
-  assertOk(!result.units.some(unit => unit.id === alliedGoblin.id), 'Blood Mage should damage allied units in range too.');
-  assertOk(!result.units.some(unit => unit.id === enemyKnight.id), 'Blood Mage should damage enemy units in range too.');
+  assertOk(result.units.some(unit => unit.id === alliedGoblin.id), 'Blood Mage should not damage allied units.');
+  assertOk(!result.units.some(unit => unit.id === enemyKnight.id), 'Blood Mage should still damage enemy units in range.');
 });
 
 runTest('each blood mage in range spawns blood goblins into nearest open cells for a death in range', () => {
@@ -427,6 +488,33 @@ runTest('each blood mage in range spawns blood goblins into nearest open cells f
     spawnedBloodGoblins.every(unit => Math.abs(unit.x - doomedKnight.x) + Math.abs(unit.y - doomedKnight.y) <= 1),
     'Blood Goblins should use the nearest open cells around the death location.'
   );
+});
+
+runTest('human units gain 1% round damage per killing blow', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const archer = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'ARCHER', x: 10, y: 10 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+  const doomedGoblin = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'GOBLIN', x: 10, y: 12 }),
+    hp: 1,
+    maxHp: 1,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [archer, doomedGoblin],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const buffedArcher = result.units.find(unit => unit.id === archer.id);
+  assertOk(!!buffedArcher, 'The archer should survive the setup.');
+  assertEqual(buffedArcher?.roundDamageBonusPct ?? 0, 0.01, 'A human unit should gain 1% round damage per killing blow.');
 });
 
 runTest('golem death spawns a goblin squad around its death location', () => {
