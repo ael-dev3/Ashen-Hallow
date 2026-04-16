@@ -120,6 +120,7 @@ export interface DeploymentUnit {
   y: number;
   xp: number;
   tier: number;
+  squadId?: number;
   placedTurn?: number;
   lastUpgradeTurn?: number;
 }

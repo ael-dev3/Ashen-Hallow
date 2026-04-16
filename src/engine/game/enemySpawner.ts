@@ -331,7 +331,7 @@ export const spawnEnemyUnits = (params: {
     return getBuildingBlueprint(a).placementCost - getBuildingBlueprint(b).placementCost;
   });
 
-  let buildingPlacementsRemaining = 1;
+  let buildingPlacementsRemaining = nextBuildings.some(building => building.team === 'ENEMY') ? 0 : 1;
   while (buildingPlacementsRemaining > 0) {
     const affordable = affordableBuildingTypes();
     if (affordable.length === 0) break;
@@ -437,6 +437,7 @@ export const spawnEnemyUnits = (params: {
     existingIds: readonly number[] = []
   ): EnemyPlacement => {
     const deploymentIds: number[] = [];
+    const squadId = existingIds[0] ?? nextUnitId;
     const spawnOffsets = getPlacementOffsets(type);
     for (let index = 0; index < spawnOffsets.length; index++) {
       const offset = spawnOffsets[index];
@@ -444,7 +445,16 @@ export const spawnEnemyUnits = (params: {
       const y = anchor.y + offset.y;
       addFootprintToOccupied(type, { x, y });
       const id = existingIds[index] ?? nextUnitId++;
-      enemyDeployments.push({ id, type, x, y, xp: 0, tier: 1, placedTurn: params.turn });
+      enemyDeployments.push({
+        id,
+        type,
+        x,
+        y,
+        xp: 0,
+        tier: 1,
+        squadId: type === 'GOBLIN' ? squadId : undefined,
+        placedTurn: params.turn,
+      });
       deploymentIds.push(id);
     }
     return { type, anchor, deploymentIds };

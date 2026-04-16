@@ -472,9 +472,11 @@ const getUnitHpDamageWeight = (unitType: UnitType): number => {
   return blueprint.placementCost / spawnCount;
 };
 
-const getUnitUpgradeCost = (unitType: UnitType): number => {
-  const blueprint = getUnitBlueprint(unitType);
-  return blueprint.placementCost / getUnitSpawnCount(unitType);
+const getUnitUpgradeCost = (unitType: UnitType): number => getUnitBlueprint(unitType).placementCost;
+
+const getDeploymentUpgradeGroup = (deployments: readonly DeploymentUnit[], deployment: DeploymentUnit): DeploymentUnit[] => {
+  if (deployment.type !== 'GOBLIN' || deployment.squadId === undefined) return [deployment];
+  return deployments.filter(candidate => candidate.type === deployment.type && candidate.squadId === deployment.squadId);
 };
 
 const getHpDamageByTeam = (units: readonly UnitState[], team: Team): number =>
@@ -791,6 +793,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       }
 
       let nextUnitId = state.nextUnitId;
+      const squadId = nextUnitId;
       const spawnOffsets = getPlacementOffsets(state.selectedUnitType);
       const placedDeployments: DeploymentUnit[] = [];
       const placedUnits: UnitState[] = [];
@@ -805,6 +808,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
           y,
           xp: 0,
           tier: 1,
+          squadId: state.selectedUnitType === 'GOBLIN' ? squadId : undefined,
           placedTurn: state.turn,
         });
         placedUnits.push(
@@ -890,16 +894,17 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       if (deploymentIndex === -1) return state;
 
       const deployment = state.deployments[deploymentIndex];
+      const group = getDeploymentUpgradeGroup(state.deployments, deployment);
       const currentTier = deployment.tier ?? 1;
       const currentXp = deployment.xp ?? 0;
-      if (deployment.lastUpgradeTurn === state.turn) {
+      if (group.some(item => item.lastUpgradeTurn === state.turn)) {
         return { ...state, message: { kind: 'info', text: 'This unit already upgraded this turn.' } };
       }
       const requiredXp = xpRequiredForTier(deployment.type, currentTier);
-      if (currentXp < requiredXp) {
+      if (group.some(item => (item.xp ?? 0) < requiredXp)) {
         return {
           ...state,
-          message: { kind: 'error', text: `Need ${requiredXp} XP to upgrade this unit (has ${currentXp}).` },
+          message: { kind: 'error', text: `Need ${requiredXp} XP to upgrade this unit group.` },
         };
       }
 
@@ -917,12 +922,13 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       const nextStats = getUnitStats(deployment.type, nextTier);
       const prevStats = getUnitStats(deployment.type, currentTier);
       const hpGain = nextStats.maxHp - prevStats.maxHp;
+      const groupIds = new Set(group.map(item => item.id));
 
       const deployments = state.deployments.map(d =>
-        d.id === deployment.id ? { ...d, tier: nextTier, xp: nextXp, lastUpgradeTurn: state.turn } : d
+        groupIds.has(d.id) ? { ...d, tier: nextTier, xp: nextXp, lastUpgradeTurn: state.turn } : d
       );
       const units = state.units.map(u =>
-        u.id === deployment.id
+        groupIds.has(u.id)
           ? {
               ...u,
               tier: nextTier,
@@ -944,19 +950,25 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     case 'UPGRADE_ALL_UNITS': {
       if (!canModifyDeployments(state)) return state;
 
-      const upgradeable = state.deployments.filter(d => {
-        const currentTier = d.tier ?? 1;
-        const currentXp = d.xp ?? 0;
-        const requiredXp = xpRequiredForTier(d.type, currentTier);
-        return currentXp >= requiredXp && d.lastUpgradeTurn !== state.turn;
-      });
-      const upgradeableIds = new Set(upgradeable.map(d => d.id));
+      const upgradeableGroups: DeploymentUnit[][] = [];
+      const seenGroupKeys = new Set<string>();
+      for (const deployment of state.deployments) {
+        const group = getDeploymentUpgradeGroup(state.deployments, deployment);
+        const groupKey = deployment.type === 'GOBLIN' && deployment.squadId !== undefined ? `GOBLIN:${deployment.squadId}` : `UNIT:${deployment.id}`;
+        if (seenGroupKeys.has(groupKey)) continue;
+        seenGroupKeys.add(groupKey);
+        const currentTier = deployment.tier ?? 1;
+        const requiredXp = xpRequiredForTier(deployment.type, currentTier);
+        const ready = group.every(item => (item.xp ?? 0) >= requiredXp && item.lastUpgradeTurn !== state.turn);
+        if (ready) upgradeableGroups.push(group);
+      }
 
-      if (upgradeable.length === 0) {
+      if (upgradeableGroups.length === 0) {
         return { ...state, message: { kind: 'info', text: 'No units are ready to upgrade.' } };
       }
 
-      const totalCost = upgradeable.reduce((sum, d) => sum + getUnitUpgradeCost(d.type), 0);
+      const upgradeableIds = new Set(upgradeableGroups.flat().map(d => d.id));
+      const totalCost = upgradeableGroups.reduce((sum, group) => sum + getUnitUpgradeCost(group[0].type), 0);
       if (state.gold < totalCost) {
         return {
           ...state,
@@ -1000,7 +1012,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         gold: Math.round((state.gold - totalCost) * 100) / 100,
         deployments,
         units,
-        message: { kind: 'success', text: `Upgraded ${upgradeable.length} unit${upgradeable.length === 1 ? '' : 's'}.` },
+        message: { kind: 'success', text: `Upgraded ${upgradeableGroups.length} unit${upgradeableGroups.length === 1 ? '' : 's'}.` },
       };
     }
     case 'UPGRADE_BUILDING': {

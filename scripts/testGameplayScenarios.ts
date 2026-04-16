@@ -159,9 +159,9 @@ runTest('enemy always chooses the opposite race', () => {
   assertEqual(createInitialGameState('ORC').enemyRace, 'HUMAN', 'Orc player should always face Human enemy.');
 });
 
-runTest('enemy AI can place race-legal buildings', () => {
+runTest('enemy AI can place one race-legal building and does not stack extras immediately', () => {
   const initial = createInitialGameState('HUMAN');
-  const result = spawnEnemyUnits({
+  const first = spawnEnemyUnits({
     grid: initial.grid,
     playerUnits: [],
     buildings: [],
@@ -188,14 +188,38 @@ runTest('enemy AI can place race-legal buildings', () => {
     enemyRace: 'ORC',
   });
 
-  assertOk(result.buildings.some(building => building.team === 'ENEMY'), 'Enemy AI should place at least one building when affordable.');
+  const enemyBuildingsAfterFirst = first.buildings.filter(building => building.team === 'ENEMY');
+  assertEqual(enemyBuildingsAfterFirst.length, 1, 'Enemy AI should place a single building, not stack multiples at once.');
   assertOk(
-    result.buildings.filter(building => building.team === 'ENEMY').every(building => building.type === 'GOLD_MINE' || building.type === 'GOBLIN_CAVE'),
+    enemyBuildingsAfterFirst.every(building => building.type === 'GOLD_MINE' || building.type === 'GOBLIN_CAVE'),
     'Enemy AI should only place buildings allowed by its race.'
+  );
+
+  const second = spawnEnemyUnits({
+    grid: initial.grid,
+    playerUnits: [],
+    buildings: first.buildings,
+    existingEnemyDeployments: first.enemyDeployments,
+    nextUnitId: first.nextUnitId,
+    nextBuildingId: first.nextBuildingId,
+    rngSeed: first.nextSeed,
+    turn: 2,
+    enemyGoldDebtNextTurn: first.nextEnemyGoldDebtNextTurn,
+    enemyGold: 10,
+    enemyUnlockedUnits: first.nextEnemyUnlockedUnits,
+    enemyPlacementSlots: first.nextEnemyPlacementSlots,
+    enemyNextPlacementSlotCost: first.nextEnemyNextPlacementSlotCost,
+    enemyRace: 'ORC',
+  });
+
+  assertEqual(
+    second.buildings.filter(building => building.team === 'ENEMY').length,
+    1,
+    'Enemy AI should not keep adding extra buildings once it already has one on board.'
   );
 });
 
-runTest('goblin upgrades cost 1g per squad, not per goblin', () => {
+runTest('goblin upgrades cost 1g per squad and upgrade the whole squad together', () => {
   const initial = createInitialGameState('ORC', 'HUMAN');
   const unlocked = gameReducer(initial, { type: 'SELECT_UNIT', unitType: 'GOBLIN' });
   const placed = gameReducer(unlocked, { type: 'PLACE_UNIT', cell: findFirstPlayerDeployableCell(unlocked) });
@@ -207,9 +231,24 @@ runTest('goblin upgrades cost 1g per squad, not per goblin', () => {
     units: placed.units.map(u => ({ ...u, xp: readyXp })),
   };
 
-  const upgraded = gameReducer(readyState, { type: 'UPGRADE_ALL_UNITS' });
-  assertEqual(upgraded.gold, 0, 'Upgrading one Goblin Squad should cost exactly 1 gold total.');
-  assertOk(upgraded.deployments.every(d => (d.tier ?? 1) === 2), 'Every goblin in the squad should upgrade together when Upgrade All is used.');
+  const singleUpgrade = gameReducer(readyState, { type: 'UPGRADE_UNIT', unitId: readyState.deployments[0].id });
+  assertEqual(singleUpgrade.gold, 0, 'Upgrading one Goblin Squad should cost exactly 1 gold total.');
+  assertOk(singleUpgrade.deployments.every(d => (d.tier ?? 1) === 2), 'Every goblin in the selected squad should level together.');
+
+  const freshUnlocked = gameReducer(initial, { type: 'SELECT_UNIT', unitType: 'GOBLIN' });
+  const firstCell = findFirstPlayerDeployableCell(freshUnlocked);
+  const firstPlaced = gameReducer({ ...freshUnlocked, placementSlots: 2, gold: 3 }, { type: 'PLACE_UNIT', cell: firstCell });
+  const secondCell = { x: firstCell.x + 4, y: firstCell.y };
+  const secondPlaced = gameReducer(firstPlaced, { type: 'PLACE_UNIT', cell: secondCell });
+  const secondReady: GameState = {
+    ...secondPlaced,
+    gold: 2,
+    deployments: secondPlaced.deployments.map(d => ({ ...d, xp: readyXp, tier: d.tier ?? 1 })),
+    units: secondPlaced.units.map(u => ({ ...u, xp: readyXp, tier: u.tier ?? 1 })),
+  };
+  const upgradedAll = gameReducer(secondReady, { type: 'UPGRADE_ALL_UNITS' });
+  assertEqual(upgradedAll.gold, 0, 'Two Goblin Squads should cost 2 gold total to upgrade.');
+  assertOk(upgradedAll.deployments.every(d => (d.tier ?? 1) === 2), 'Upgrade All should level both goblin squads fully.');
 });
 
 runTest('building placement does not consume unit placement slots', () => {
@@ -488,6 +527,37 @@ runTest('each blood mage in range spawns blood goblins into nearest open cells f
     spawnedBloodGoblins.every(unit => Math.abs(unit.x - doomedKnight.x) + Math.abs(unit.y - doomedKnight.y) <= 1),
     'Blood Goblins should use the nearest open cells around the death location.'
   );
+});
+
+runTest('blood goblin inherits the tier of the dead unit', () => {
+  const initial = createInitialGameState('ORC', 'HUMAN');
+  const bloodMage = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'BLOOD_MAGE', x: 10, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const doomedTierThreeKnight = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'KNIGHT', x: 12, y: 10, tier: 3 }),
+    hp: 1,
+    maxHp: getUnitBlueprint('KNIGHT').maxHp * 3,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const killerGoblin = {
+    ...createUnit({ id: 3, team: 'PLAYER', type: 'GOBLIN', x: 11, y: 10 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+
+  const result = stepBattle({
+    grid: initial.grid,
+    units: [bloodMage, doomedTierThreeKnight, killerGoblin],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const spawnedBloodGoblin = result.units.find(unit => unit.type === 'BLOOD_GOBLIN');
+  assertEqual(spawnedBloodGoblin?.tier ?? 0, 3, 'Blood Goblin tier should match the dead unit tier.');
 });
 
 runTest('human units gain 1% round damage per killing blow', () => {
