@@ -3,7 +3,7 @@
 Ashen-Hallow is a browser-based fantasy autobattler built with TypeScript and deployed on GitHub Pages. It started as a focused standalone rebuild of an earlier prototype and is now being hardened into a more professional, expandable strategy game with stronger combat identity, clearer faction mechanics, and a better long-term architecture plan.
 
 **Live game:** https://ael-dev3.github.io/Ashen-Hallow/  
-**Current version:** `v0.0.06`
+**Current version:** `v0.0.07`
 
 ## Overview
 
@@ -16,7 +16,15 @@ Ashen-Hallow is built around a fast preparation-and-resolution loop:
 - scale through economy, upgrades, synergies, and tactical positioning
 - outlast the opposing warhost before your side collapses
 
-The current playable foundation is focused on deterministic combat, faction asymmetry, and a darker crimson sacred-horror presentation.
+The current playable foundation now has a clearer TypeScript module spine: domain types, catalog facades, AI planning, battle support helpers, reducer orchestration, rendering viewport state, input interaction mapping, and audio service wiring are separated into focused modules while existing gameplay entry points remain stable.
+
+## v0.0.07 highlights
+
+- Engine domain types now live in explicit `engine/domain` modules instead of one catch-all game type file
+- Unit and building catalogs moved behind production-facing catalog facades
+- Enemy AI, reducer helpers, battle support utilities, rendering viewport, render theme, input interactor, and audio service were split into focused modules
+- Added an architecture-contract test that enforces module boundaries and file-size budgets alongside gameplay regression coverage
+- Fixed the in-game debug overlay mounting path while preserving the current UI and deterministic combat behavior
 
 ## v0.0.06 highlights
 
@@ -33,7 +41,7 @@ The current playable foundation is focused on deterministic combat, faction asym
 - **Grid deployment** — positioning is a core skill expression layer
 - **Faction identity** — Humans and Orcs support distinct playstyles
 - **Economy and upgrades** — gold, structures, XP, and timing shape momentum
-- **Deterministic gameplay regression coverage** — core combat behaviors are validated through simulation tests
+- **Deterministic gameplay regression coverage** — core combat behaviors and architecture boundaries are validated through automated tests
 
 ## Factions
 
@@ -90,7 +98,7 @@ Ashen-Hallow is aiming for a distinct blood-lit sacred-horror battlefield rather
 
 ## Technical direction
 
-The current codebase is stable and playable, but still transitional. Short-term engineering priorities are:
+The current codebase is stable and playable. v0.0.07 moved the most important TypeScript seams into production-facing modules while keeping compatibility facades for existing game, UI, and test imports. Short-term engineering priorities are:
 
 - break oversized simulation and UI files into smaller systems
 - move toward more data-driven ability definitions

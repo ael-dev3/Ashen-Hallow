@@ -1,12 +1,30 @@
 # Ashen-Hallow Roadmap
 
-## v0.0.06 - Combat readability and escalation polish
+## v0.0.07 - Production TypeScript architecture pass
 
 Goals:
 
-- improve combat readability by surfacing live status information on hovered units
-- make Human defenses and Orc spawners scale more dynamically inside a round
-- keep the expanded combat sandbox deterministic under regression coverage
+- raise the project quality bar through clearer TypeScript boundaries and smaller modules
+- keep current gameplay behavior stable while reshaping internals
+- add automated modularity guardrails so the codebase does not drift back into god files
+- keep GitHub Pages release flow unchanged and safe
+
+Delivered in this phase:
+
+- domain types moved into `src/engine/domain`
+- unit and building catalogs moved into `src/engine/catalog` with compatibility facades
+- enemy AI moved into `src/engine/ai/enemy`
+- battle geometry, targeting, movement, spawn, and intent helpers moved into `src/engine/battle/simulationSupport.ts`
+- reducer helper logic moved into `src/engine/game/reducerHelpers.ts`
+- rendering viewport/camera math moved into `src/presentation/rendering/CanvasViewport.ts`
+- render constants moved into `src/presentation/rendering/renderTheme.ts`
+- canvas input action mapping moved into `src/presentation/input/GameCanvasInteractor.ts`
+- audio logic moved behind `src/app/audio/AudioService.ts`
+- tooltip copy/format helpers moved into `src/app/ui/screens/game/gameText.ts`
+- architecture contract test added to enforce module paths and file-size budgets
+- debug overlay mounting path fixed
+
+## v0.0.06 - Combat readability and escalation polish
 
 Delivered in this phase:
 
@@ -19,13 +37,6 @@ Delivered in this phase:
 
 ## v0.0.05 - Foundation hardening
 
-Goals:
-
-- improve documentation and contributor onboarding
-- make GitHub workflows and issue intake more professional
-- keep the combat sandbox deterministic while abilities expand
-- document the migration path away from prototype-style architecture
-
 Delivered in this phase:
 
 - refreshed README and architecture notes
@@ -35,48 +46,44 @@ Delivered in this phase:
 
 ## Near-term roadmap
 
-### 1. Simulation modularization
+### 1. UI composition
 
-- split `simulateBattle.ts` into smaller systems/modules
-- isolate status effects, on-hit triggers, summons, and movement modifiers
-- reduce the amount of per-unit special-casing in the core loop
+- split `GameScreen.ts` into focused HUD, palette, upgrade, round-result, debug, toast, and canvas-host modules
+- keep CSS class names stable during extraction to avoid visual regressions
+- add pure selector tests for panel view models
 
-### 2. Data-driven abilities
+### 2. Battle system modules
+
+- split the current support module into targeting, movement, damage resolution, death effects, status effects, and spawn modules
+- preserve `stepBattle(...)` as the public facade until all callers are migrated
+- add fixtures for each special ability and deterministic tick ordering
+
+### 3. Data-driven abilities
 
 - move player-facing ability descriptions into a shared ability catalog
 - define trigger/effect metadata in one place
-- reduce duplicated logic between tooltips, visuals, and simulation
+- reduce duplicated logic between tooltips, visuals, AI heuristics, and simulation
 
-### 3. UI and UX polish
+### 4. Rendering layers
 
-- break `GameScreen.ts` into focused HUD, tooltip, overlay, and control modules
-- improve battlefield readability for status zones and ability ranges
-- continue strengthening touch/mobile usability
-
-### 4. Rendering evolution
-
+- split `CanvasRenderer.ts` into explicit grid, placement preview, building, effect, unit, and result layers
 - keep Canvas stable short-term while ability VFX mature
-- evaluate a future WebGL/PixiJS path once unit count and effect density justify it
+- evaluate a future WebGL/PixiJS path only when unit count and effect density justify it
 
-### 5. AI improvements
+### 5. AI planning
 
 - expose AI tuning through config data
 - separate drafting, economy, positioning, and combat heuristics
+- add deterministic seed fixtures for planner decisions
 - add difficulty presets without hardcoding behavior everywhere
 
-### 6. Production-readiness track
+### 6. Production readiness
 
-- stricter browser hardening
-- stronger test coverage and CI gates
-- release notes and semantic tagging discipline
-- future authoritative networking architecture exploration
+- keep architecture-contract checks in CI
+- add release notes and semantic tagging discipline
+- strengthen browser hardening over time
+- explore future authoritative networking architecture without compromising deterministic local sim
 
 ## Longer-term target
 
-A modern, extensible autobattler stack with:
-
-- modular simulation systems
-- data-driven content definitions
-- cleaner UI composition
-- scalable rendering
-- stronger multiplayer-ready deterministic foundations
+A modern, extensible autobattler stack with modular simulation systems, data-driven content definitions, cleaner UI composition, scalable rendering, and stronger multiplayer-ready deterministic foundations.

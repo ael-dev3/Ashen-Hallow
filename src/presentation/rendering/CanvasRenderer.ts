@@ -1,40 +1,18 @@
-import type { CellCoord, CellZone, GameState } from '../../engine/game/types';
+import type { CellCoord, GameState } from '../../engine/game/types';
 import { getPlacementFootprint, getUnitBlueprint, getUnitFootprint } from '../../engine/game/unitCatalog';
 import { getBuildingBlueprint, getBuildingFootprint } from '../../engine/game/buildingCatalog';
 import { toRoman, xpRequiredForTier } from '../../engine/game/xp';
 import { isPlayerDeployableCell } from '../../engine/game/grid';
 import { GAME_CONFIG } from '../../engine/config/gameConfig';
 import type { GridLayout } from './types';
-
-const ZONE_FILL: Record<CellZone, string> = {
-  PLAYER: 'rgba(46, 204, 113, 0.10)',
-  NEUTRAL: 'rgba(241, 196, 15, 0.08)',
-  ENEMY: 'rgba(231, 76, 60, 0.10)',
-};
-
-const TEAM_STROKE: Record<'PLAYER' | 'ENEMY', string> = {
-  PLAYER: 'rgba(46, 204, 113, 0.95)',
-  ENEMY: 'rgba(231, 76, 60, 0.95)',
-};
-
-const FLANK_TINT_ENEMY_DEPLOY = 'rgba(231, 76, 60, 0.16)';
-const FLANK_TINT_PLAYER_DEPLOY = 'rgba(46, 204, 113, 0.16)';
-const FLANK_TINT_LOCKED = 'rgba(148, 156, 166, 0.14)';
-const INACTIVE_UNIT_FILL = 'rgba(148, 156, 166, 0.65)';
-
-const GRID_MAP_SCALE = 4;
-const GRID_CELL_SCALE = 0.5;
-const GRID_ZOOM_MIN = 0.5;
-const GRID_ZOOM_MAX = 2;
+import { CanvasViewport } from './CanvasViewport';
+import { FLANK_TINT_ENEMY_DEPLOY, FLANK_TINT_LOCKED, FLANK_TINT_PLAYER_DEPLOY, INACTIVE_UNIT_FILL, TEAM_STROKE, ZONE_FILL } from './renderTheme';
 
 export class CanvasRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly fontFamily: string;
-  private sizeCssPx = { width: 0, height: 0 };
-  private layout: GridLayout = { cellSizePx: 1, gridLeftPx: 0, gridTopPx: 0, gridWidthPx: 0, gridHeightPx: 0 };
-  private panPx = { x: 0, y: 0 };
-  private zoom = GRID_ZOOM_MIN;
+  private readonly viewport = new CanvasViewport();
 
   constructor(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
@@ -46,82 +24,54 @@ export class CanvasRenderer {
 
   public resizeToCssPixels(width: number, height: number): void {
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    this.sizeCssPx = { width, height };
+    this.viewport.resizeToCssPixels(width, height);
     this.canvas.width = Math.floor(width * dpr);
     this.canvas.height = Math.floor(height * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   public getLayout(state: GameState): GridLayout {
-    const baseLayout = this.getBaseLayout(state, this.zoom);
-    this.panPx = this.clampPan(baseLayout, this.panPx);
-    const gridLeftPx = baseLayout.gridLeftPx + this.panPx.x;
-    const gridTopPx = baseLayout.gridTopPx + this.panPx.y;
-    this.layout = { ...baseLayout, gridLeftPx, gridTopPx };
-    return this.layout;
+    return this.viewport.getLayout(state.grid);
   }
 
   public getPan(): { x: number; y: number } {
-    return { x: this.panPx.x, y: this.panPx.y };
+    return this.viewport.getPan();
   }
 
   public getZoom(): number {
-    return this.zoom;
+    return this.viewport.getZoom();
   }
 
   public setPan(state: GameState, panX: number, panY: number): void {
-    const baseLayout = this.getBaseLayout(state, this.zoom);
-    this.panPx = this.clampPan(baseLayout, { x: panX, y: panY });
+    this.viewport.setPan(state.grid, panX, panY);
   }
 
   public panBy(state: GameState, dx: number, dy: number): void {
-    this.setPan(state, this.panPx.x + dx, this.panPx.y + dy);
+    this.viewport.panBy(state.grid, dx, dy);
   }
 
   public setZoom(state: GameState, zoom: number): void {
-    const clampedZoom = this.clampZoom(zoom);
-    this.zoom = clampedZoom;
-    const baseLayout = this.getBaseLayout(state, clampedZoom);
-    this.panPx = this.clampPan(baseLayout, this.panPx);
+    this.viewport.setZoom(state.grid, zoom);
   }
 
   public setZoomAt(state: GameState, zoom: number, anchorX: number, anchorY: number): void {
-    const layout = this.getLayout(state);
-    if (layout.cellSizePx <= 0) return;
-    const gridX = (anchorX - layout.gridLeftPx) / layout.cellSizePx;
-    const gridY = (anchorY - layout.gridTopPx) / layout.cellSizePx;
-
-    const clampedZoom = this.clampZoom(zoom);
-    this.zoom = clampedZoom;
-    const baseLayout = this.getBaseLayout(state, clampedZoom);
-    const panX = anchorX - baseLayout.gridLeftPx - gridX * baseLayout.cellSizePx;
-    const panY = anchorY - baseLayout.gridTopPx - gridY * baseLayout.cellSizePx;
-    this.panPx = this.clampPan(baseLayout, { x: panX, y: panY });
+    this.viewport.setZoomAt(state.grid, zoom, anchorX, anchorY);
   }
 
   public zoomBy(state: GameState, factor: number, anchorX: number, anchorY: number): void {
-    if (!Number.isFinite(factor) || factor === 0) return;
-    this.setZoomAt(state, this.zoom * factor, anchorX, anchorY);
+    this.viewport.zoomBy(state.grid, factor, anchorX, anchorY);
   }
 
   public cellToCanvasCenter(state: GameState, cell: CellCoord): { x: number; y: number } {
-    const layout = this.getLayout(state);
-    return this.cellToCanvasCenterWithLayout(layout, cell);
+    return this.viewport.cellToCanvasCenter(state.grid, cell);
   }
 
   public canvasToCell(state: GameState, canvasX: number, canvasY: number): CellCoord | null {
-    const layout = this.getLayout(state);
-    const localX = canvasX - layout.gridLeftPx;
-    const localY = canvasY - layout.gridTopPx;
-    if (localX < 0 || localY < 0 || localX >= layout.gridWidthPx || localY >= layout.gridHeightPx) return null;
-    const x = Math.floor(localX / layout.cellSizePx);
-    const y = Math.floor(localY / layout.cellSizePx);
-    if (x < 0 || x >= state.grid.cols || y < 0 || y >= state.grid.rows) return null;
-    return { x, y };
+    return this.viewport.canvasToCell(state.grid, canvasX, canvasY);
   }
 
   public render(state: GameState): void {
-    const { width, height } = this.sizeCssPx;
+    const { width, height } = this.viewport.getSizeCssPx();
     if (width <= 0 || height <= 0) return;
 
     const ctx = this.ctx;
@@ -377,45 +327,15 @@ export class CanvasRenderer {
     }
   }
 
-  private cellToCanvasCenterWithLayout(layout: GridLayout, cell: CellCoord): { x: number; y: number } {
-    const x = layout.gridLeftPx + (cell.x + 0.5) * layout.cellSizePx;
-    const y = layout.gridTopPx + (cell.y + 0.5) * layout.cellSizePx;
-    return { x, y };
-  }
-
   private unitToCanvasCenter(
     layout: GridLayout,
-    unit: { type: GameState['units'][number]['type']; x: number; y: number },
+    unit: { x: number; y: number },
     footprint: { width: number; height: number }
   ): { x: number; y: number } {
-    const x = layout.gridLeftPx + (unit.x + footprint.width / 2) * layout.cellSizePx;
-    const y = layout.gridTopPx + (unit.y + footprint.height / 2) * layout.cellSizePx;
-    return { x, y };
-  }
-
-  private getBaseLayout(state: GameState, zoom: number): GridLayout {
-    const cellSizePx =
-      Math.min(this.sizeCssPx.width / state.grid.cols, this.sizeCssPx.height / state.grid.rows) *
-      GRID_MAP_SCALE *
-      GRID_CELL_SCALE *
-      zoom;
-    const gridWidthPx = cellSizePx * state.grid.cols;
-    const gridHeightPx = cellSizePx * state.grid.rows;
-    const gridLeftPx = (this.sizeCssPx.width - gridWidthPx) / 2;
-    const gridTopPx = (this.sizeCssPx.height - gridHeightPx) / 2;
-    return { cellSizePx, gridLeftPx, gridTopPx, gridWidthPx, gridHeightPx };
-  }
-
-  private clampZoom(zoom: number): number {
-    if (!Number.isFinite(zoom)) return this.zoom;
-    return Math.max(GRID_ZOOM_MIN, Math.min(GRID_ZOOM_MAX, zoom));
-  }
-
-  private clampPan(baseLayout: GridLayout, pan: { x: number; y: number }): { x: number; y: number } {
-    const maxPanX = Math.max(0, (baseLayout.gridWidthPx - this.sizeCssPx.width) / 2);
-    const maxPanY = Math.max(0, (baseLayout.gridHeightPx - this.sizeCssPx.height) / 2);
-    const clamp = (value: number, limit: number): number => Math.max(-limit, Math.min(limit, value));
-    return { x: clamp(pan.x, maxPanX), y: clamp(pan.y, maxPanY) };
+    return {
+      x: layout.gridLeftPx + (unit.x + footprint.width / 2) * layout.cellSizePx,
+      y: layout.gridTopPx + (unit.y + footprint.height / 2) * layout.cellSizePx,
+    };
   }
 
   private drawCellOutline(x: number, y: number, layout: GridLayout, strokeStyle: string): void {
@@ -533,7 +453,7 @@ export class CanvasRenderer {
   private drawOilFlaskFields(state: GameState, layout: GridLayout): void {
     for (const unit of state.units) {
       if (unit.type !== 'ARCHER' || !unit.oilFlaskUsed || unit.oilFlaskX === null || unit.oilFlaskY === null) continue;
-      const center = this.cellToCanvasCenterWithLayout(layout, { x: unit.oilFlaskX, y: unit.oilFlaskY });
+      const center = this.viewport.cellToCanvasCenterWithLayout(layout, { x: unit.oilFlaskX, y: unit.oilFlaskY });
       const radius = layout.cellSizePx * 10;
       const ctx = this.ctx;
       ctx.save();

@@ -1,320 +1,37 @@
 import type { BuildingState, GridState, Team, UnitState } from './types';
 import {
-  createUnit,
   getPlacementOffsets,
   getUnitBlueprint,
   getUnitCenter,
   getUnitFootprint,
   getUnitFootprintCells,
   getUnitMoveCooldownMs,
-  getUnitStats,
   isGoblinPackUnitType,
   isHumanUnitType,
 } from './unitCatalog';
-import { getBuildingAttackStats, getBuildingCenter, getBuildingFootprint, getBuildingStats, getKnightDamageReductionPctForTier } from './buildingCatalog';
+import { getBuildingAttackStats, getBuildingCenter, getBuildingFootprint, getKnightDamageReductionPctForTier } from './buildingCatalog';
 import { addXp, XP_REWARD } from './xp';
 
-const manhattan = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
-  Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-
-const BUILDING_HITBOX_PADDING = 0.35;
-const OIL_FLASK_RADIUS = 10;
-const OIL_FLASK_SLOW_MULTIPLIER = 0.4;
-
-const keyOf = (x: number, y: number): string => `${x},${y}`;
-
-const zoneOf = (grid: GridState, unit: UnitState): 'PLAYER' | 'NEUTRAL' | 'ENEMY' => grid.cells[unit.y][unit.x].zone;
-
-const findNeutralCenterY = (grid: GridState): number | null => {
-  let minY = Number.POSITIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (let y = 0; y < grid.rows; y++) {
-    if (grid.cells[y][0]?.zone !== 'NEUTRAL') continue;
-    minY = Math.min(minY, y);
-    maxY = Math.max(maxY, y);
-  }
-  if (!Number.isFinite(minY) || !Number.isFinite(maxY)) return null;
-  return Math.floor((minY + maxY) / 2);
-};
-
-interface AttackIntent {
-  attackerId: number;
-  attackerKind: 'UNIT' | 'BUILDING';
-  defenderId: number;
-  defenderKind: 'UNIT' | 'BUILDING';
-  damage: number;
-}
-
-interface MoveIntent {
-  unitId: number;
-  toX: number;
-  toY: number;
-}
-
-const chebyshev = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
-  Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-
-const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
-
-const getUnitAttackDamage = (unit: UnitState, allies: readonly UnitState[]): number => {
-  const blueprint = getUnitBlueprint(unit.type);
-  const baseDamage = getUnitStats(unit.type, unit.tier).attackDamage * (unit.statMultiplier ?? 1);
-  const bonusRadius = blueprint.allyDamageBonusRadius ?? 0;
-  const bonusPerUnit = blueprint.allyDamageBonusPerUnit ?? 0;
-  if (bonusRadius <= 0 || bonusPerUnit <= 0) return baseDamage;
-
-  const unitCenter = getUnitCenter(unit);
-  const nearbyAllies = allies.filter(ally => {
-    if (ally.id === unit.id) return false;
-    const samePack = isGoblinPackUnitType(unit.type) && isGoblinPackUnitType(ally.type);
-    return (samePack || ally.type === unit.type) && chebyshev(unitCenter, getUnitCenter(ally)) <= bonusRadius;
-  }).length;
-
-  const packDamage = baseDamage * (1 + nearbyAllies * bonusPerUnit);
-  return packDamage * (1 + (unit.roundDamageBonusPct ?? 0));
-};
-
-const getUnitMaxHpMultiplier = (unit: UnitState, allies: readonly UnitState[]): number => {
-  const blueprint = getUnitBlueprint(unit.type);
-  let bonusPct = unit.roundHpBonusPct ?? 0;
-  const allyRadius = blueprint.allyMaxHpBonusRadius ?? 0;
-  const allyPerUnit = blueprint.allyMaxHpBonusPerUnit ?? 0;
-  if (allyRadius > 0 && allyPerUnit > 0) {
-    const unitCenter = getUnitCenter(unit);
-    const nearbyAllies = allies.filter(ally => {
-      if (ally.id === unit.id) return false;
-      return ally.type === unit.type && chebyshev(unitCenter, getUnitCenter(ally)) <= allyRadius;
-    }).length;
-    bonusPct += nearbyAllies * allyPerUnit;
-  }
-  return 1 + bonusPct;
-};
-
-const applyUnitHpBonuses = (units: readonly UnitState[]): UnitState[] => {
-  return units.map(unit => {
-    const allies = units.filter(other => other.team === unit.team);
-    const baseMaxHp = getUnitStats(unit.type, unit.tier).maxHp * (unit.statMultiplier ?? 1);
-    const targetMaxHp = baseMaxHp * getUnitMaxHpMultiplier(unit, allies);
-    const hpDelta = targetMaxHp - unit.maxHp;
-    return {
-      ...unit,
-      maxHp: targetMaxHp,
-      hp: Math.min(targetMaxHp, Math.max(0, unit.hp + hpDelta)),
-    };
-  });
-};
-
-const isUnitWithinAttackRange = (attacker: UnitState, target: UnitState): boolean => {
-  const blueprint = getUnitBlueprint(attacker.type);
-  const attackerCenter = getUnitCenter(attacker);
-  const targetCenter = getUnitCenter(target);
-  const dist = blueprint.attackDistance === 'CHEBYSHEV' ? chebyshev(attackerCenter, targetCenter) : manhattan(attackerCenter, targetCenter);
-  return dist <= blueprint.attackRange;
-};
-
-const getBuildingEngagementPoint = (
-  unitCenter: { x: number; y: number },
-  building: BuildingState
-): { x: number; y: number } => {
-  const footprint = getBuildingFootprint(building.type);
-  const minX = building.x + 0.5 - BUILDING_HITBOX_PADDING;
-  const maxX = building.x + footprint.width - 0.5 + BUILDING_HITBOX_PADDING;
-  const minY = building.y + 0.5 - BUILDING_HITBOX_PADDING;
-  const maxY = building.y + footprint.height - 0.5 + BUILDING_HITBOX_PADDING;
-  return {
-    x: clamp(unitCenter.x, minX, maxX),
-    y: clamp(unitCenter.y, minY, maxY),
-  };
-};
-
-type TargetCandidate =
-  | { kind: 'UNIT'; id: number; center: { x: number; y: number }; unit: UnitState }
-  | { kind: 'BUILDING'; id: number; center: { x: number; y: number }; building: BuildingState };
-
-const pickNearestTarget = (
-  unit: UnitState,
-  enemies: readonly UnitState[],
-  enemyBuildings: readonly BuildingState[]
-): TargetCandidate | null => {
-  const unitCenter = getUnitCenter(unit);
-  const candidates: TargetCandidate[] = [];
-  const ignoreAggroRange = enemies.length === 0;
-
-  for (const enemy of enemies) {
-    candidates.push({ kind: 'UNIT', id: enemy.id, center: getUnitCenter(enemy), unit: enemy });
-  }
-
-  for (const building of enemyBuildings) {
-    const stats = getBuildingStats(building.type, building.tier);
-    const center = getBuildingEngagementPoint(unitCenter, building);
-    const dist = manhattan(unitCenter, center);
-    if (!ignoreAggroRange && dist > stats.aggroRange) continue;
-    candidates.push({ kind: 'BUILDING', id: building.id, center, building });
-  }
-
-  if (candidates.length === 0) return null;
-
-  let best = candidates[0];
-  let bestDist = manhattan(unitCenter, best.center);
-  for (let i = 1; i < candidates.length; i++) {
-    const candidate = candidates[i];
-    const dist = manhattan(unitCenter, candidate.center);
-    if (dist < bestDist) {
-      best = candidate;
-      bestDist = dist;
-      continue;
-    }
-    if (dist === bestDist) {
-      if (candidate.kind !== best.kind) {
-        if (candidate.kind === 'UNIT') {
-          best = candidate;
-        }
-      } else if (candidate.id < best.id) {
-        best = candidate;
-      }
-    }
-  }
-
-  return best;
-};
-
-const getUnitTargetsInAttackRange = (unit: UnitState, enemies: readonly UnitState[]): UnitState[] => {
-  const blueprint = getUnitBlueprint(unit.type);
-  const unitCenter = getUnitCenter(unit);
-  return [...enemies]
-    .filter(enemy => {
-      const targetCenter = getUnitCenter(enemy);
-      const dist =
-        blueprint.attackDistance === 'CHEBYSHEV' ? chebyshev(unitCenter, targetCenter) : manhattan(unitCenter, targetCenter);
-      return dist <= blueprint.attackRange;
-    })
-    .sort((a, b) => {
-      const distA = manhattan(unitCenter, getUnitCenter(a));
-      const distB = manhattan(unitCenter, getUnitCenter(b));
-      return distA - distB || a.id - b.id;
-    });
-};
-
-const getOilFieldsForTeam = (units: readonly UnitState[], team: Team): Array<{ x: number; y: number }> =>
-  units
-    .filter(unit => unit.team === team && unit.type === 'ARCHER' && unit.oilFlaskUsed && unit.oilFlaskX !== null && unit.oilFlaskY !== null)
-    .map(unit => ({ x: unit.oilFlaskX as number, y: unit.oilFlaskY as number }));
-
-const getMoveSlowMultiplier = (unit: UnitState, oilFields: readonly { x: number; y: number }[]): number => {
-  if (oilFields.length === 0) return 1;
-  const center = getUnitCenter(unit);
-  return oilFields.some(field => chebyshev(center, field) <= OIL_FLASK_RADIUS) ? OIL_FLASK_SLOW_MULTIPLIER : 1;
-};
-
-const canOccupyAnchor = (
-  grid: GridState,
-  unit: UnitState,
-  anchor: { x: number; y: number },
-  occupiedByKey: ReadonlyMap<string, string>
-): boolean => {
-  const footprint = getUnitFootprint(unit.type);
-  const selfKey = `unit:${unit.id}`;
-  for (let dy = 0; dy < footprint.height; dy++) {
-    for (let dx = 0; dx < footprint.width; dx++) {
-      const x = anchor.x + dx;
-      const y = anchor.y + dy;
-      if (x < 0 || x >= grid.cols || y < 0 || y >= grid.rows) return false;
-      const occupant = occupiedByKey.get(keyOf(x, y));
-      if (occupant !== undefined && occupant !== selfKey) return false;
-    }
-  }
-  return true;
-};
-
-const findNearestOpenSpawnAnchor = (
-  grid: GridState,
-  unit: UnitState,
-  origin: { x: number; y: number },
-  occupiedByKey: ReadonlyMap<string, string>
-): { x: number; y: number } | null => {
-  const anchors: Array<{ x: number; y: number; dist: number }> = [];
-  for (let y = 0; y < grid.rows; y++) {
-    for (let x = 0; x < grid.cols; x++) {
-      anchors.push({ x, y, dist: manhattan(origin, { x, y }) });
-    }
-  }
-
-  anchors.sort((a, b) => a.dist - b.dist || a.y - b.y || a.x - b.x);
-  for (const anchor of anchors) {
-    if (!canOccupyAnchor(grid, unit, anchor, occupiedByKey)) continue;
-    return { x: anchor.x, y: anchor.y };
-  }
-
-  return null;
-};
-
-const spawnUnitNearOrigin = (params: {
-  grid: GridState;
-  occupiedByKey: Map<string, string>;
-  unitType: UnitState['type'];
-  origin: { x: number; y: number };
-  team: Team;
-  tier: number;
-  nextSpawnId: number;
-}): UnitState | null => {
-  const prototype = createUnit({
-    id: params.nextSpawnId,
-    team: params.team,
-    type: params.unitType,
-    x: params.origin.x,
-    y: params.origin.y,
-    xp: 0,
-    tier: params.tier,
-  });
-  const anchor = findNearestOpenSpawnAnchor(params.grid, prototype, params.origin, params.occupiedByKey);
-  if (!anchor) return null;
-  const spawn = { ...prototype, x: anchor.x, y: anchor.y };
-  for (const cell of getUnitFootprintCells(spawn.type, anchor)) {
-    params.occupiedByKey.set(keyOf(cell.x, cell.y), `unit:${spawn.id}`);
-  }
-  return spawn;
-};
-
-const getMoveStepToward = (
-  grid: GridState,
-  unit: UnitState,
-  target: { x: number; y: number },
-  occupiedByKey: ReadonlyMap<string, string>,
-  tieBreaker: 'VERTICAL' | 'HORIZONTAL',
-  orbitDirection: 1 | -1
-): { x: number; y: number } | null => {
-  const dx = target.x - unit.x;
-  const dy = target.y - unit.y;
-  const absDx = Math.abs(dx);
-  const absDy = Math.abs(dy);
-  const verticalFirst = absDy > absDx || (absDy === absDx && tieBreaker === 'VERTICAL');
-
-  const candidates: Array<{ x: number; y: number }> = [];
-  if (verticalFirst && dy !== 0) candidates.push({ x: unit.x, y: unit.y + Math.sign(dy) });
-  if (dx !== 0) candidates.push({ x: unit.x + Math.sign(dx), y: unit.y });
-  if (!verticalFirst && dy !== 0) candidates.push({ x: unit.x, y: unit.y + Math.sign(dy) });
-
-  for (const c of candidates) {
-    if (!canOccupyAnchor(grid, unit, c, occupiedByKey)) continue;
-    return c;
-  }
-
-  const lateralCandidates: Array<{ x: number; y: number }> = [];
-  if (absDx >= absDy) {
-    lateralCandidates.push({ x: unit.x, y: unit.y + orbitDirection });
-    lateralCandidates.push({ x: unit.x, y: unit.y - orbitDirection });
-  } else {
-    lateralCandidates.push({ x: unit.x + orbitDirection, y: unit.y });
-    lateralCandidates.push({ x: unit.x - orbitDirection, y: unit.y });
-  }
-
-  for (const c of lateralCandidates) {
-    if (!canOccupyAnchor(grid, unit, c, occupiedByKey)) continue;
-    return c;
-  }
-
-  return null;
-};
+import {
+  applyUnitHpBonuses,
+  canOccupyAnchor,
+  chebyshev,
+  findNearestOpenSpawnAnchor,
+  findNeutralCenterY,
+  getMoveSlowMultiplier,
+  getMoveStepToward,
+  getOilFieldsForTeam,
+  getUnitAttackDamage,
+  getUnitTargetsInAttackRange,
+  isUnitWithinAttackRange,
+  keyOf,
+  manhattan,
+  pickNearestTarget,
+  spawnUnitNearOrigin,
+  zoneOf,
+  type AttackIntent,
+  type MoveIntent,
+} from '../battle/simulationSupport';
 
 export const stepBattle = (params: {
   grid: GridState;

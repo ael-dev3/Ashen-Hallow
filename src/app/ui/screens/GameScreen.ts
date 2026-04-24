@@ -1,5 +1,6 @@
 import { GAME_CONFIG } from '../../../engine/config/gameConfig';
 import { getUpgradeAllSummary } from '../../../engine/game/upgrades';
+import { buildBuildingTooltipText, buildUnitTooltipText, formatHp } from './game/gameText';
 import type { GameAction } from '../../../engine/game/actions';
 import type { BuildingType, GameState, RoundUnitSummary, UnitType, CellCoord, Race } from '../../../engine/game/types';
 import { createInitialGameState } from '../../../engine/game/initialState';
@@ -313,7 +314,7 @@ export class GameScreen implements Screen {
       });
       this.tooltipUnsubs.push(
         this.tooltip.bind(button.getElement(), {
-          text: this.buildUnitTooltipText(unitType),
+          text: buildUnitTooltipText(unitType),
         })
       );
       unitRow.appendChild(button.getElement());
@@ -438,7 +439,7 @@ export class GameScreen implements Screen {
         variant: 'ghost',
         onClick: () => this.store.dispatch({ type: 'SELECT_BUILDING', buildingType }),
       });
-      this.bindBuildingTooltip(buildingType, button.getElement(), this.buildBuildingTooltipText(buildingType));
+      this.bindBuildingTooltip(buildingType, button.getElement(), buildBuildingTooltipText(buildingType));
       buildingItem.appendChild(button.getElement());
       buildingRow.appendChild(buildingItem);
       this.buildingButtons.set(buildingType, button);
@@ -616,12 +617,14 @@ export class GameScreen implements Screen {
     this.debugStatsEl = debugUi.statsEl;
     this.debugLogsEl = debugUi.logsEl;
     this.container.appendChild(this.toastStack);
+    this.container.appendChild(debugUi.overlay);
     this.installDebugHooks();
     this.renderer = new CanvasRenderer(this.canvas);
     this.input = new CanvasInput({
       canvas: this.canvas,
       store: this.store,
       renderer: this.renderer,
+      requestRender: () => this.renderer.render(this.store.getState()),
       onCellLongPress: ({ cell, clientX, clientY }) => this.showCellTooltipAtClientPoint(cell, clientX, clientY),
     });
     this.loop = new GameLoop({ store: this.store, stepMs: GAME_CONFIG.simulationStepMs });
@@ -962,61 +965,6 @@ export class GameScreen implements Screen {
     this.upgradeAllTooltipUnsub = this.tooltip.bind(this.upgradeAllBtn.getElement(), { text });
   }
 
-  private buildUnitTooltipText(unitType: UnitType): string {
-    const blueprint = getUnitBlueprint(unitType);
-    const aoeText = blueprint.aoeRadius ? `, AOE ${blueprint.aoeRadius}` : '';
-    const footprint = getPlacementFootprint(unitType);
-    const squadSize = getPlacementOffsets(unitType).length;
-    const sizeText = footprint.width > 1 || footprint.height > 1 ? ` Size ${footprint.width}x${footprint.height}.` : '';
-    const squadText = squadSize > 1 ? ` Squad x${squadSize}.` : '';
-    const moveSpeed = getUnitMoveSpeed(unitType);
-    const moveSpeedText = moveSpeed.toFixed(2);
-
-    let mechanicText = '';
-    if (unitType === 'KNIGHT') {
-      mechanicText = ' Units that hit this Knight gain stacking bleed for the rest of the round, taking 1% max HP per second per stack. Each upgraded tier after I also gains 10% damage reduction.';
-    } else if (unitType === 'ARCHER') {
-      mechanicText = ' On first contact, drops an oil flask on its target that slows enemy movement by 60% in a 10-tile radius. Also gains +1% round ATK per killing blow, and each kill lets this Archer hit 1 additional enemy in range for the rest of the round.';
-    } else if (unitType === 'MAGE') {
-      mechanicText = ' On the first hit it receives each round, it blinks 5 tiles backward and creates 4 mirror images with 10% of its stats.';
-    } else if (unitType === 'BLOOD_MAGE') {
-      mechanicText = ' Hits every unit in range, and each non-Blood-Goblin death in range spawns 1 Blood Goblin per Blood Mage in range at the nearest open tile. The battlefield now shows its crimson influence radius.';
-    } else if (unitType === 'GOLEM') {
-      mechanicText = ' On death, it bursts into a full Goblin Squad around its death location.';
-    } else if (unitType === 'GOBLIN') {
-      mechanicText = ' Gains +10% ATK per nearby Goblin or Blood Goblin within 10 tiles.';
-    } else if (unitType === 'HOBGOBLIN') {
-      mechanicText = ' Cleaves nearby enemies. Gains +10% max HP per nearby Hobgoblin within a 20-tile square radius, and gains +1% round max HP each time a Goblin or Blood Goblin dies within that radius.';
-    }
-
-    return `${blueprint.name}: Unlock ${blueprint.unlockCost}g (once). Place ${blueprint.placementCost}g. HP ${blueprint.maxHp}, ATK ${blueprint.attackDamage}, RNG ${blueprint.attackRange}${aoeText}, MOV ${moveSpeedText}.${sizeText}${squadText}${mechanicText}`;
-  }
-
-  private buildBuildingTooltipText(buildingType: BuildingType, state?: GameState): string {
-    const blueprint = getBuildingBlueprint(buildingType);
-    const footprint = getBuildingFootprint(buildingType);
-    const sizeText = `Size ${footprint.width}x${footprint.height}`;
-    const incomeText = blueprint.goldPerTurn ? ` Income +${blueprint.goldPerTurn}g/turn.` : '';
-    const attackStats = getBuildingAttackStats(buildingType, 1);
-    const attackText = attackStats
-      ? ` ATK ${attackStats.attackDamage} | RNG ${attackStats.attackRange} | TGTS ${attackStats.maxTargets} | CD ${(attackStats.attackCooldownMs / 1000).toFixed(2)}s.`
-      : '';
-    const spawnInfo = getBuildingSpawnInfo(buildingType, 1);
-    const spawnUnitLabel = spawnInfo ? spawnInfo.unitType.toLowerCase() : '';
-    const spawnUnitSuffix = spawnInfo && spawnInfo.countPerInterval !== 1 ? 's' : '';
-    const spawnText = spawnInfo
-      ? ` Spawns ${spawnInfo.countPerInterval} ${spawnUnitLabel}${spawnUnitSuffix}/s (+1/s per upgrade).`
-      : '';
-    const maxCount = blueprint.maxCount ?? 1;
-    const placedCount = state
-      ? state.buildings.filter(b => b.type === buildingType && b.team === 'PLAYER').length
-      : 0;
-    const limitText =
-      placedCount >= maxCount
-        ? ` Placed ${placedCount}/${maxCount}. Cannot place more.`
-        : ` Placed ${placedCount}/${maxCount}.`;
-    return `${blueprint.name}: Unlock ${blueprint.unlockCost}g (once). Place ${blueprint.placementCost}g. HP ${blueprint.maxHp}, Aggro ${blueprint.aggroRange}, ${sizeText}.${attackText}${incomeText}${spawnText}${limitText}`;
-  }
 
   private bindBuildingTooltip(buildingType: BuildingType, target: HTMLElement, text: string): void {
     const existing = this.buildingTooltipUnsubs.get(buildingType);
@@ -1028,7 +976,7 @@ export class GameScreen implements Screen {
 
   private updateBuildingTooltips(state: GameState): void {
     for (const [buildingType, button] of this.buildingButtons.entries()) {
-      const nextText = this.buildBuildingTooltipText(buildingType, state);
+      const nextText = buildBuildingTooltipText(buildingType, state);
       const prevText = this.buildingTooltipText.get(buildingType);
       if (prevText === nextText) continue;
       this.bindBuildingTooltip(buildingType, button.getElement(), nextText);
@@ -1065,8 +1013,8 @@ export class GameScreen implements Screen {
     this.roundResultTitleEl.textContent = `Round ${summary.round} Results`;
     this.roundResultSubtitleEl.textContent =
       summary.winner === 'DRAW' ? 'Draw' : `${summary.winner === 'PLAYER' ? 'Player' : 'Enemy'} Wins`;
-    this.roundResultDamageEnemyEl.textContent = this.formatHp(summary.playerDamage);
-    this.roundResultDamagePlayerEl.textContent = this.formatHp(summary.enemyDamage);
+    this.roundResultDamageEnemyEl.textContent = formatHp(summary.playerDamage);
+    this.roundResultDamagePlayerEl.textContent = formatHp(summary.enemyDamage);
 
     this.roundResultUnitsEl.innerHTML = '';
     this.roundResultUnitsEl.appendChild(
@@ -1108,7 +1056,7 @@ export class GameScreen implements Screen {
     heading.textContent = title;
     const total = document.createElement('div');
     total.className = 'round-result__team-total';
-    total.textContent = `Damage: ${this.formatHp(totalDamage)}`;
+    total.textContent = `Damage: ${formatHp(totalDamage)}`;
     header.appendChild(heading);
     header.appendChild(total);
     column.appendChild(header);
@@ -1172,8 +1120,8 @@ export class GameScreen implements Screen {
             const tierLabel = entry.tier > 1 ? ` ${toRoman(entry.tier) || entry.tier}` : '';
             const countLabel = entry.count > 1 ? ` x${entry.count}` : '';
             const percent = this.getDamagePercent(totalDamage, entry.totalDamage);
-            const perUnit = this.formatHp(entry.damagePerUnit);
-            const totalUnitDamage = this.formatHp(entry.totalDamage);
+            const perUnit = formatHp(entry.damagePerUnit);
+            const totalUnitDamage = formatHp(entry.totalDamage);
             return `${blueprint.name}${tierLabel}${countLabel} - ${perUnit} dmg ea | ${totalUnitDamage} total | ${percent}%`;
           })
           .join(' | ');
@@ -1261,8 +1209,8 @@ export class GameScreen implements Screen {
         }
       }
       if (this.lastObservedPlayerHp !== state.playerHp || this.lastObservedEnemyHp !== state.enemyHp) {
-        const playerHpText = this.formatHp(state.playerHp);
-        const enemyHpText = this.formatHp(state.enemyHp);
+        const playerHpText = formatHp(state.playerHp);
+        const enemyHpText = formatHp(state.enemyHp);
         this.logDebug('info', `HP: You ${playerHpText} | Enemy ${enemyHpText}`);
         this.lastObservedPlayerHp = state.playerHp;
         this.lastObservedEnemyHp = state.enemyHp;
@@ -1294,8 +1242,8 @@ export class GameScreen implements Screen {
     this.roundBanner.textContent = `Round ${state.turn} - ${phaseLabel}`;
     const debtText = state.goldDebtNextTurn > 0 ? ` (Debt -${state.goldDebtNextTurn} next)` : '';
     this.goldPill.textContent = `Gold: ${state.gold}${debtText}`;
-    const playerHpText = this.formatHp(state.playerHp);
-    const enemyHpText = this.formatHp(state.enemyHp);
+    const playerHpText = formatHp(state.playerHp);
+    const enemyHpText = formatHp(state.enemyHp);
     this.hpPill.textContent = `HP: You ${playerHpText} | Enemy ${enemyHpText}`;
     const placementsLeft = Math.max(0, state.placementSlots - state.placementsUsedThisTurn);
     this.placementsPill.textContent = `Unit placements: ${state.placementsUsedThisTurn}/${state.placementSlots} (${placementsLeft} left)`;
@@ -1489,15 +1437,11 @@ export class GameScreen implements Screen {
     const enemyAlive = state.units.filter(u => u.team === 'ENEMY' && u.hp > 0).length;
     const prep = state.intermissionMsRemaining > 0 ? `${Math.ceil(state.intermissionMsRemaining / 1000)}s` : '0s';
     const battle = state.battleTimeMs > 0 ? `${Math.floor(state.battleTimeMs / 1000)}s` : '0s';
-    const playerHpText = this.formatHp(state.playerHp);
-    const enemyHpText = this.formatHp(state.enemyHp);
+    const playerHpText = formatHp(state.playerHp);
+    const enemyHpText = formatHp(state.enemyHp);
     this.debugStatsEl.textContent = `T${state.turn} ${state.phase} | HP ${playerHpText}-${enemyHpText} | Units ${playerAlive}v${enemyAlive} | Prep ${prep} | Battle ${battle}`;
   }
 
-  private formatHp(value: number): string {
-    if (Number.isInteger(value)) return value.toString();
-    return value.toFixed(2).replace(/\.?0+$/, '');
-  }
 
   private updateSelectedUnitPanel(state: GameState): void {
     const canModify = (state.phase === 'DEPLOYMENT' || state.phase === 'INTERMISSION') && !state.matchResult;

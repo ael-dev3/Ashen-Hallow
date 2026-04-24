@@ -1,13 +1,14 @@
 {
   "name": "ashen-hallow",
   "private": true,
-  "version": "0.0.06",
+  "version": "0.0.07",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "test:sim": "tsc -p tsconfig.sim.json && node -e \"require('fs').mkdirSync('.sim-dist',{recursive:true});require('fs').writeFileSync('.sim-dist/package.json', JSON.stringify({type:'commonjs'}))\" && node .sim-dist/scripts/testGameplayScenarios.js",
-    "test": "npm run build && npm run test:sim",
+    "test:architecture": "node scripts/testArchitectureContracts.mjs",
+    "test": "npm run build && npm run test:sim && npm run test:architecture",
     "preview": "vite preview"
   },
   "devDependencies": {

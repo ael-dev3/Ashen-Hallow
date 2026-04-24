@@ -1,105 +1,130 @@
 # Ashen-Hallow Architecture
 
-Ashen-Hallow is currently in a transition phase between a fast-moving prototype and a production-ready autobattler foundation.
+Ashen-Hallow is a browser-based TypeScript autobattler. v0.0.07 moves the project from prototype-shaped files toward a production module spine while keeping the current gameplay APIs stable.
 
-## Current state
+## Architecture goals
 
-The game is playable, deterministic, and regression-tested, but several systems are still too centralized:
+- preserve deterministic combat and seeded AI behavior
+- keep browser/UI code separate from pure engine code
+- keep large systems behind stable facades while internals become smaller modules
+- make future mechanics easier to add without touching state, rendering, AI, and tooltip code at once
+- enforce modularity with automated architecture-contract checks
 
-- combat simulation is concentrated in a large `simulateBattle.ts`
-- UI behavior and tooltip copy still rely on a heavyweight `GameScreen.ts`
-- many mechanics require touching simulation, rendering, state types, and UI text at the same time
-- content expansion is still more imperative than data-driven
+## Runtime layers
 
-## Current module groups
+### `src/engine/domain`
 
-- `src/engine/config` — runtime constants and versioning
-- `src/engine/game` — rules, catalogs, reducer, deterministic battle simulation
-- `src/engine/ai` — AI drafting and placement logic
-- `src/presentation/rendering` — canvas battlefield rendering
-- `src/presentation/input` — board interaction and camera controls
-- `src/app/ui` — menus, screens, HUD, audio, tooltips
+Pure type modules:
 
-## v0.0.06 priorities
+- `primitives.ts` — teams, races, cells, unit/building identifiers
+- `entities.ts` — unit, building, deployment, and blueprint shapes
+- `events.ts` — SFX, UI messages, battle and round summaries
+- `state.ts` — full `GameState`
 
-1. keep the game playable and deterministic while mechanics expand
-2. make combat-state information visible enough for players to parse live fights quickly
-3. support more round-scaling building behaviors without breaking reducer/sim consistency
-4. continue documenting a credible path away from prototype-style file sprawl
+`src/engine/game/types.ts` remains as a compatibility facade so older imports keep working.
 
-## v0.0.05 priorities
+### `src/engine/catalog`
 
-1. keep the game playable and deterministic while mechanics expand
-2. improve project professionalism through docs, templates, and release hygiene
-3. make current mechanics easier to understand visually and through tooltips
-4. document a credible path away from prototype-style file sprawl
+Catalog-backed game content:
 
-## Near-term architecture goals
+- `units.ts` — unit blueprints, movement/stat helpers, unit factory
+- `buildings.ts` — building blueprints, upgrade scaling, building factory
 
-### 1. Simulation modularization
+`src/engine/game/unitCatalog.ts` and `buildingCatalog.ts` re-export these modules as stable public entry points.
 
-Refactor battle logic out of one oversized file into focused systems/modules such as:
+### `src/engine/game`
 
-- target selection
-- movement resolution
-- on-hit effects
-- summons and death triggers
-- status effects
-- per-frame / per-tick damage processing
+Game orchestration and compatibility surface:
 
-### 2. Data-driven abilities
+- `reducer.ts` — action handling and high-level state transitions
+- `reducerHelpers.ts` — placement rules, battle lifecycle helpers, building spawns, round summaries, XP application
+- `simulateBattle.ts` — public battle-step orchestration
+- `grid.ts`, `initialState.ts`, `races.ts`, `upgrades.ts`, `xp.ts` — focused rule helpers
 
-Introduce a shared ability catalog so the same source can drive:
+The reducer is now a clearer orchestration layer instead of owning every helper directly.
 
-- simulation triggers/effects
-- tooltip copy
-- UI metadata
-- future AI heuristics
-- future VFX tagging
+### `src/engine/battle`
 
-### 3. Cleaner UI boundaries
+Battle support utilities extracted from the old monolith:
 
-Split `GameScreen.ts` into smaller modules/components for:
+- `simulationSupport.ts` — geometry, targeting helpers, HP/damage bonuses, movement helpers, spawn helpers, and battle intent types
 
-- HUD
-- right/left side panels
-- tooltip rendering
-- battle overlays
-- interaction state
+The public `stepBattle(...)` API is unchanged and remains covered by gameplay regression scenarios.
 
-### 4. Rendering evolution
+### `src/engine/ai`
 
-Short-term: keep Canvas stable and improve battlefield readability.
+Enemy AI now has a dedicated module path:
 
-Mid-term:
+- `ai/enemy/enemySpawner.ts` — seeded enemy economy, unlock, placement, building, and mirror-avoidance planning
 
-- formalize render-only metadata for effects/zones
-- reduce logic leaking into renderer decisions
-- evaluate PixiJS/WebGL when unit counts and VFX density justify it
+`game/enemySpawner.ts` is a compatibility facade.
 
-### 5. AI separation
+### `src/presentation/rendering`
 
-Move the AI toward more explicit, configurable layers:
+Canvas rendering is split into state/control and drawing concerns:
 
-- economy decisions
-- unlock decisions
-- composition selection
-- placement strategy
-- difficulty tuning via config instead of hardcoded heuristics
+- `CanvasRenderer.ts` — render facade and drawing pipeline
+- `CanvasViewport.ts` — resize, pan, zoom, layout, and canvas/cell coordinate conversion
+- `renderTheme.ts` — battlefield colors and render constants
 
-### 6. Production-readiness track
+### `src/presentation/input`
 
-The long-term architecture should support:
+Input is separated from game interaction mapping:
 
-- stricter browser hardening
-- stronger deterministic tests and CI gates
-- eventual authoritative networking concepts
-- persistence/progression support without rewriting the whole game core
+- `CanvasInput.ts` — DOM pointer/wheel listener lifecycle and gesture handling
+- `GameCanvasInteractor.ts` — cell-click-to-game-action mapping
+- `inputTypes.ts` — input-facing interfaces
 
-## Guiding principles
+### `src/app/audio`
 
-- deterministic first
-- data over hardcoded condition chains where practical
-- visuals must communicate mechanics clearly
-- every gameplay change should have regression coverage
-- refactor toward extensibility without stalling playable progress
+Audio is now behind a service module:
+
+- `AudioService.ts` — sound preference, music playback, SFX buffering, and service facade
+- `app/ui/audio.ts` — compatibility wrapper for current screens
+
+### `src/app/ui`
+
+The current DOM UI remains intentionally lightweight and dependency-free:
+
+- `GameScreen.ts` — screen composition, HUD, overlays, debug monitor, and store/loop wiring
+- `screens/game/gameText.ts` — tooltip/stat copy and formatting helpers
+- `atoms` — button and tooltip primitives
+
+v0.0.07 also fixes the debug overlay mounting path.
+
+## Public compatibility facades
+
+These imports are intentionally preserved:
+
+- `src/engine/game/types.ts`
+- `src/engine/game/unitCatalog.ts`
+- `src/engine/game/buildingCatalog.ts`
+- `src/engine/game/enemySpawner.ts`
+- `src/engine/game/simulateBattle.ts`
+- `src/app/ui/audio.ts`
+
+This lets tests, scripts, and UI code migrate gradually without a risky full import rewrite in one release.
+
+## Verification gates
+
+The release test command is:
+
+```bash
+npm test
+```
+
+It runs:
+
+1. TypeScript and Vite production build
+2. deterministic gameplay regression scenarios
+3. architecture contracts in `scripts/testArchitectureContracts.mjs`
+
+The architecture contract checks required module paths, compatibility facades, and line budgets for former god files.
+
+## Next architecture steps
+
+- split `GameScreen.ts` into panel/overlay view components
+- split `CanvasRenderer.ts` drawing into render layers
+- move ability descriptions toward shared data used by simulation, UI, AI, and VFX
+- introduce small tests for pure selectors, placement rules, viewport math, and AI planning fixtures
+- keep compatibility facades until all callers are migrated cleanly

@@ -3,12 +3,14 @@ import type { GameState } from '../../engine/game/types';
 import type { Store } from '../../engine/state/Store';
 import type { CanvasRenderer } from '../rendering/CanvasRenderer';
 import type { CellCoord } from '../../engine/game/types';
-import { getUnitAt } from '../../engine/game/grid';
+import { dispatchCellAction } from './GameCanvasInteractor';
+import type { CanvasInputOptions } from './inputTypes';
 
 export class CanvasInput {
   private readonly canvas: HTMLCanvasElement;
   private readonly store: Store<GameState, GameAction>;
   private readonly renderer: CanvasRenderer;
+  private readonly requestRender: () => void;
   private lastHoverKey: string | null = null;
   private readonly onCellLongPress?: (params: { cell: CellCoord; clientX: number; clientY: number }) => void;
   private isMouseDown = false;
@@ -23,15 +25,11 @@ export class CanvasInput {
   private touchLongPressTimer: number | null = null;
   private touchLongPressFired = false;
 
-  constructor(params: {
-    canvas: HTMLCanvasElement;
-    store: Store<GameState, GameAction>;
-    renderer: CanvasRenderer;
-    onCellLongPress?: (params: { cell: CellCoord; clientX: number; clientY: number }) => void;
-  }) {
+  constructor(params: CanvasInputOptions) {
     this.canvas = params.canvas;
     this.store = params.store;
     this.renderer = params.renderer;
+    this.requestRender = params.requestRender ?? (() => this.renderer.render(this.store.getState()));
     this.onCellLongPress = params.onCellLongPress;
   }
 
@@ -90,7 +88,7 @@ export class CanvasInput {
       if (this.isMousePanning) {
         const state = this.store.getState();
         this.renderer.setPan(state, this.mouseDownPan.x + dx, this.mouseDownPan.y + dy);
-        this.renderer.render(state);
+        this.requestRender();
         return;
       }
     }
@@ -157,20 +155,11 @@ export class CanvasInput {
   };
 
   private handleCellAction(cell: CellCoord): void {
-    const state = this.store.getState();
-    const unit = getUnitAt(state.units, cell);
-    if (unit && unit.team === 'PLAYER') {
-      const canSelect = (state.phase === 'DEPLOYMENT' || state.phase === 'INTERMISSION') && !state.matchResult;
-      if (canSelect) {
-        this.store.dispatch({ type: 'SELECT_PLACED_UNIT', unitId: unit.id });
-      }
-      return;
-    }
-    if (state.selectedPlacementKind === 'BUILDING') {
-      this.store.dispatch({ type: 'PLACE_BUILDING', cell });
-      return;
-    }
-    this.store.dispatch({ type: 'PLACE_UNIT', cell });
+    dispatchCellAction({
+      state: this.store.getState(),
+      cell,
+      dispatch: action => this.store.dispatch(action),
+    });
   }
 
   private onPointerCancel = (e: PointerEvent): void => {
@@ -198,7 +187,7 @@ export class CanvasInput {
     } else {
       this.renderer.panBy(state, -e.deltaX, -e.deltaY);
     }
-    this.renderer.render(state);
+    this.requestRender();
     this.clearHover();
   };
 
