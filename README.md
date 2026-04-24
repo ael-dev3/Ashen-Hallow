@@ -109,6 +109,7 @@ See:
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- [`docs/SPACETIMEDB_INTEGRATION.md`](docs/SPACETIMEDB_INTEGRATION.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
 

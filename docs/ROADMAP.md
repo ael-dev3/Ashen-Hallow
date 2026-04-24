@@ -82,6 +82,7 @@ Delivered in this phase:
 - keep architecture-contract checks in CI
 - add release notes and semantic tagging discipline
 - strengthen browser hardening over time
+- evaluate SpacetimeDB as the multiplayer/persistence backend path documented in [`SPACETIMEDB_INTEGRATION.md`](SPACETIMEDB_INTEGRATION.md)
 - explore future authoritative networking architecture without compromising deterministic local sim
 
 ## Longer-term target
