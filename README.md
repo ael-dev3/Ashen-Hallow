@@ -3,7 +3,7 @@
 Ashen-Hallow is a browser-based fantasy autobattler built with TypeScript and deployed on GitHub Pages. It started as a focused standalone rebuild of an earlier prototype and is now being hardened into a more professional, expandable strategy game with stronger combat identity, clearer faction mechanics, and a better long-term architecture plan.
 
 **Live game:** https://ael-dev3.github.io/Ashen-Hallow/  
-**Current version:** `v0.0.07`
+**Current version:** `v0.0.08`
 
 ## Overview
 
@@ -17,6 +17,14 @@ Ashen-Hallow is built around a fast preparation-and-resolution loop:
 - outlast the opposing warhost before your side collapses
 
 The current playable foundation now has a clearer TypeScript module spine: domain types, catalog facades, AI planning, battle support helpers, reducer orchestration, rendering viewport state, input interaction mapping, and audio service wiring are separated into focused modules while existing gameplay entry points remain stable.
+
+## v0.0.08 highlights
+
+- Fixed same-lane pathing so blocked units use their true center and deterministic orbit side instead of drifting right from half-cell target math
+- Improved fallback movement scoring so units choose valid detours more consistently when the direct cell is occupied
+- Added mobile touch-drag panning on the battle canvas while preserving tap-to-place and long-press tooltips
+- Collapsed the debug monitor by default so the playable screen feels cleaner while keeping the expand-on-demand diagnostics
+- Added regression/architecture coverage for the new pathfinding and input polish gates
 
 ## v0.0.07 highlights
 
@@ -98,7 +106,7 @@ Ashen-Hallow is aiming for a distinct blood-lit sacred-horror battlefield rather
 
 ## Technical direction
 
-The current codebase is stable and playable. v0.0.07 moved the most important TypeScript seams into production-facing modules while keeping compatibility facades for existing game, UI, and test imports. Short-term engineering priorities are:
+The current codebase is stable and playable. v0.0.08 keeps the modular TypeScript spine from v0.0.07 while tightening pathfinding, mobile canvas input, and default in-game UI polish. Short-term engineering priorities are:
 
 - break oversized simulation and UI files into smaller systems
 - move toward more data-driven ability definitions

@@ -210,8 +210,29 @@
 }
 
 
+.debug-overlay--collapsed {
+  width: auto;
+  max-width: min(300px, calc(100vw - 24px));
+  gap: 0;
+  padding: 8px;
+  opacity: 0.82;
+}
+
 .debug-overlay--collapsed .debug-overlay__logs {
   display: none;
+}
+
+.debug-overlay--collapsed .debug-overlay__stats {
+  max-width: 150px;
+}
+
+.debug-overlay--collapsed .debug-overlay__btn:not(:last-child) {
+  display: none;
+}
+
+.debug-overlay--collapsed:hover,
+.debug-overlay--collapsed:focus-within {
+  opacity: 1;
 }
 
 .debug-overlay__header {

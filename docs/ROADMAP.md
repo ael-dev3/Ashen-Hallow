@@ -1,5 +1,16 @@
 # Ashen-Hallow Roadmap
 
+## v0.0.08 - Pathfinding and current-version UX polish
+
+Delivered in this phase:
+
+- corrected same-lane movement to compare target positions against unit centers, not top-left anchors
+- added deterministic fallback movement scoring so crowded lanes choose stable detours instead of right-biased drift
+- added a gameplay regression for same-lane pathing behavior
+- added mobile touch-drag canvas panning while preserving tap placement and long-press tooltips
+- collapsed the debug monitor by default and kept it available as expand-on-demand diagnostics
+- extended architecture contracts to guard the new input and UI polish expectations
+
 ## v0.0.07 - Production TypeScript architecture pass
 
 Goals:

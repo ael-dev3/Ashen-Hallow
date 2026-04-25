@@ -1,6 +1,6 @@
 # Ashen-Hallow Architecture
 
-Ashen-Hallow is a browser-based TypeScript autobattler. v0.0.07 moves the project from prototype-shaped files toward a production module spine while keeping the current gameplay APIs stable.
+Ashen-Hallow is a browser-based TypeScript autobattler. v0.0.08 keeps the v0.0.07 production module spine stable while tightening movement support, mobile canvas gestures, and the default play-screen diagnostics posture.
 
 ## Architecture goals
 
@@ -47,7 +47,7 @@ The reducer is now a clearer orchestration layer instead of owning every helper 
 
 Battle support utilities extracted from the old monolith:
 
-- `simulationSupport.ts` — geometry, targeting helpers, HP/damage bonuses, movement helpers, spawn helpers, and battle intent types
+- `simulationSupport.ts` — geometry, targeting helpers, HP/damage bonuses, center-aware movement helpers, spawn helpers, and battle intent types
 
 The public `stepBattle(...)` API is unchanged and remains covered by gameplay regression scenarios.
 
@@ -71,7 +71,7 @@ Canvas rendering is split into state/control and drawing concerns:
 
 Input is separated from game interaction mapping:
 
-- `CanvasInput.ts` — DOM pointer/wheel listener lifecycle and gesture handling
+- `CanvasInput.ts` — DOM pointer/wheel listener lifecycle, mouse/touch pan gestures, tap placement, and long-press tooltip handling
 - `GameCanvasInteractor.ts` — cell-click-to-game-action mapping
 - `inputTypes.ts` — input-facing interfaces
 
@@ -90,7 +90,7 @@ The current DOM UI remains intentionally lightweight and dependency-free:
 - `screens/game/gameText.ts` — tooltip/stat copy and formatting helpers
 - `atoms` — button and tooltip primitives
 
-v0.0.07 also fixes the debug overlay mounting path.
+v0.0.08 keeps the debug monitor collapsed by default for a cleaner player-facing screen while retaining expand-on-demand diagnostics for QA.
 
 ## Public compatibility facades
 

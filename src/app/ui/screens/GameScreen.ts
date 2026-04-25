@@ -124,7 +124,7 @@ export class GameScreen implements Screen {
   private readonly toastStack: HTMLDivElement;
   private readonly debugStatsEl: HTMLDivElement;
   private readonly debugLogsEl: HTMLDivElement;
-  private debugCollapsed = false;
+  private debugCollapsed = true;
   private debugVerbose = false;
   private debugEntries: DebugLogEntry[] = [];
   private debugNextEntryId = 1;
@@ -701,7 +701,7 @@ export class GameScreen implements Screen {
     toastStack.className = 'toast-stack';
 
     const overlay = document.createElement('div');
-    overlay.className = 'debug-overlay';
+    overlay.className = 'debug-overlay debug-overlay--collapsed';
 
     const header = document.createElement('div');
     header.className = 'debug-overlay__header';
@@ -746,7 +746,7 @@ export class GameScreen implements Screen {
     const collapseBtn = document.createElement('button');
     collapseBtn.type = 'button';
     collapseBtn.className = 'debug-overlay__btn';
-    collapseBtn.textContent = 'Collapse';
+    collapseBtn.textContent = 'Expand';
     collapseBtn.addEventListener('click', () => {
       this.debugCollapsed = !this.debugCollapsed;
       overlay.classList.toggle('debug-overlay--collapsed', this.debugCollapsed);

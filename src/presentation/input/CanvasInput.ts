@@ -21,7 +21,9 @@ export class CanvasInput {
 
   private touchPointerId: number | null = null;
   private touchStartClient: { x: number; y: number } | null = null;
+  private touchStartPan: { x: number; y: number } | null = null;
   private touchCell: CellCoord | null = null;
+  private isTouchPanning = false;
   private touchLongPressTimer: number | null = null;
   private touchLongPressFired = false;
 
@@ -51,6 +53,10 @@ export class CanvasInput {
     this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
     this.canvas.removeEventListener('contextmenu', this.onContextMenu);
     this.canvas.removeEventListener('wheel', this.onWheel);
+    this.clearHover();
+    this.resetMousePanState();
+    this.clearTouchLongPressTimer();
+    this.resetTouchState();
   }
 
   private onContextMenu = (e: MouseEvent): void => {
@@ -66,7 +72,7 @@ export class CanvasInput {
 
   private onPointerMove = (e: PointerEvent): void => {
     if (e.pointerType !== 'mouse') {
-      this.maybeCancelTouchLongPress(e);
+      this.onTouchPointerMove(e);
       return;
     }
 
@@ -130,9 +136,10 @@ export class CanvasInput {
 
       const cell = this.touchCell;
       const fired = this.touchLongPressFired;
+      const wasPanning = this.isTouchPanning;
       this.resetTouchState();
 
-      if (!cell || fired) return;
+      if (!cell || fired || wasPanning) return;
 
       this.handleCellAction(cell);
       return;
@@ -206,7 +213,9 @@ export class CanvasInput {
     this.tryCapture(e.pointerId);
     this.touchPointerId = e.pointerId;
     this.touchStartClient = { x: e.clientX, y: e.clientY };
+    this.touchStartPan = this.renderer.getPan();
     this.touchCell = cell;
+    this.isTouchPanning = false;
     this.touchLongPressFired = false;
     const startClientX = e.clientX;
     const startClientY = e.clientY;
@@ -219,16 +228,23 @@ export class CanvasInput {
     }, 450);
   }
 
-  private maybeCancelTouchLongPress(e: PointerEvent): void {
-    if (!this.touchLongPressTimer) return;
+  private onTouchPointerMove(e: PointerEvent): void {
     if (this.touchPointerId !== e.pointerId) return;
     if (!this.touchStartClient) return;
 
-    const dx = Math.abs(e.clientX - this.touchStartClient.x);
-    const dy = Math.abs(e.clientY - this.touchStartClient.y);
-    if (dx + dy <= 10) return;
+    const dx = e.clientX - this.touchStartClient.x;
+    const dy = e.clientY - this.touchStartClient.y;
+    const distanceSq = dx * dx + dy * dy;
+    if (!this.isTouchPanning && distanceSq > this.panThresholdPx * this.panThresholdPx) {
+      this.isTouchPanning = true;
+      this.clearTouchLongPressTimer();
+    }
 
-    this.clearTouchLongPressTimer();
+    if (!this.isTouchPanning || !this.touchStartPan) return;
+
+    const state = this.store.getState();
+    this.renderer.setPan(state, this.touchStartPan.x + dx, this.touchStartPan.y + dy);
+    this.requestRender();
   }
 
   private clearTouchLongPressTimer(): void {
@@ -240,7 +256,9 @@ export class CanvasInput {
   private resetTouchState(): void {
     this.touchPointerId = null;
     this.touchStartClient = null;
+    this.touchStartPan = null;
     this.touchCell = null;
+    this.isTouchPanning = false;
     this.touchLongPressFired = false;
   }
 

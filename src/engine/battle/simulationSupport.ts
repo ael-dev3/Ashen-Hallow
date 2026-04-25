@@ -279,35 +279,53 @@ export const getMoveStepToward = (
   tieBreaker: 'VERTICAL' | 'HORIZONTAL',
   orbitDirection: 1 | -1
 ): { x: number; y: number } | null => {
-  const dx = target.x - unit.x;
-  const dy = target.y - unit.y;
+  const unitCenter = getUnitCenter(unit);
+  const dx = target.x - unitCenter.x;
+  const dy = target.y - unitCenter.y;
   const absDx = Math.abs(dx);
   const absDy = Math.abs(dy);
   const verticalFirst = absDy > absDx || (absDy === absDx && tieBreaker === 'VERTICAL');
+  const currentDistance = manhattan(unitCenter, target);
+  const candidates = new Map<string, { x: number; y: number; preference: number }>();
 
-  const candidates: Array<{ x: number; y: number }> = [];
-  if (verticalFirst && dy !== 0) candidates.push({ x: unit.x, y: unit.y + Math.sign(dy) });
-  if (dx !== 0) candidates.push({ x: unit.x + Math.sign(dx), y: unit.y });
-  if (!verticalFirst && dy !== 0) candidates.push({ x: unit.x, y: unit.y + Math.sign(dy) });
+  const addCandidate = (x: number, y: number, preference: number): void => {
+    const key = keyOf(x, y);
+    if (candidates.has(key)) return;
+    candidates.set(key, { x, y, preference });
+  };
 
-  for (const c of candidates) {
-    if (!canOccupyAnchor(grid, unit, c, occupiedByKey)) continue;
-    return c;
-  }
+  if (verticalFirst && dy !== 0) addCandidate(unit.x, unit.y + Math.sign(dy), 0);
+  if (dx !== 0) addCandidate(unit.x + Math.sign(dx), unit.y, 1);
+  if (!verticalFirst && dy !== 0) addCandidate(unit.x, unit.y + Math.sign(dy), 2);
 
-  const lateralCandidates: Array<{ x: number; y: number }> = [];
   if (absDx >= absDy) {
-    lateralCandidates.push({ x: unit.x, y: unit.y + orbitDirection });
-    lateralCandidates.push({ x: unit.x, y: unit.y - orbitDirection });
+    addCandidate(unit.x, unit.y + orbitDirection, 3);
+    addCandidate(unit.x, unit.y - orbitDirection, 4);
   } else {
-    lateralCandidates.push({ x: unit.x + orbitDirection, y: unit.y });
-    lateralCandidates.push({ x: unit.x - orbitDirection, y: unit.y });
+    addCandidate(unit.x + orbitDirection, unit.y, 3);
+    addCandidate(unit.x - orbitDirection, unit.y, 4);
   }
 
-  for (const c of lateralCandidates) {
-    if (!canOccupyAnchor(grid, unit, c, occupiedByKey)) continue;
-    return c;
-  }
+  addCandidate(unit.x + 1, unit.y, 5);
+  addCandidate(unit.x - 1, unit.y, 6);
+  addCandidate(unit.x, unit.y + 1, 7);
+  addCandidate(unit.x, unit.y - 1, 8);
 
-  return null;
+  const best = [...candidates.values()]
+    .filter(candidate => canOccupyAnchor(grid, unit, candidate, occupiedByKey))
+    .map(candidate => {
+      const candidateCenter = getUnitCenter({ ...unit, x: candidate.x, y: candidate.y });
+      const distance = manhattan(candidateCenter, target);
+      const progressBucket = distance < currentDistance ? 0 : distance === currentDistance ? 1 : 2;
+      return { ...candidate, distance, progressBucket };
+    })
+    .sort((a, b) =>
+      a.progressBucket - b.progressBucket ||
+      a.distance - b.distance ||
+      a.preference - b.preference ||
+      a.y - b.y ||
+      a.x - b.x
+    )[0];
+
+  return best ? { x: best.x, y: best.y } : null;
 };

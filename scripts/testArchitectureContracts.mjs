@@ -81,5 +81,7 @@ assertContains('src/engine/game/buildingCatalog.ts', "from '../catalog/buildings
 assertContains('src/engine/game/enemySpawner.ts', "from '../ai/enemy/enemySpawner'");
 assertContains('src/app/ui/audio.ts', "defaultAudioService");
 assertNotContains('src/app/ui/audio.ts', 'new AudioContext');
+assertContains('src/presentation/input/CanvasInput.ts', 'isTouchPanning');
+assertContains('src/app/ui/screens/GameScreen.ts', 'debugCollapsed = true');
 
 console.log('[pass] architecture contracts satisfied');

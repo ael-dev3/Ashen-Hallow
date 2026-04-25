@@ -19,7 +19,7 @@ export class MainMenu implements Screen {
   private soundTooltipUnsub: (() => void) | null = null;
 
   constructor(options: MainMenuOptions) {
-     this.options = options;
+    this.options = options;
     this.container = document.createElement('div');
     this.container.className = 'screen screen--start';
     this.tooltip = new Tooltip();

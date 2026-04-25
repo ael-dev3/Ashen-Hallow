@@ -9,6 +9,7 @@ import { stepBattle } from '../src/engine/game/simulateBattle';
 import { createUnit, getUnitBlueprint } from '../src/engine/game/unitCatalog';
 import { xpRequiredForTier } from '../src/engine/game/xp';
 import { getUpgradeAllSummary } from '../src/engine/game/upgrades';
+import { getMoveStepToward, keyOf } from '../src/engine/battle/simulationSupport';
 import type { CellCoord, DeploymentUnit, GameState } from '../src/engine/game/types';
 
 const fail = (message: string): never => {
@@ -312,6 +313,20 @@ runTest('units move directly toward an archer tower instead of stalling into neu
   assertOk(!!nextKnight, 'Knight should still be alive after the first movement tick.');
   assertOk((nextKnight?.x ?? 0) > playerKnight.x, 'Units should advance toward the Archer Tower horizontally when it is the only target.');
   assertEqual(nextKnight?.y ?? 0, playerKnight.y, 'Units should not drift into neutral staging when pathing to a lone building.');
+});
+
+runTest('same-lane pathing sidesteps deterministically instead of drifting right from half-cell centers', () => {
+  const initial = createInitialGameState();
+  const unit = createUnit({ id: 2, team: 'PLAYER', type: 'KNIGHT', x: 10, y: 23 });
+  const blockedAhead = createUnit({ id: 1, team: 'PLAYER', type: 'KNIGHT', x: 10, y: 22 });
+  const occupied = new Map<string, string>([
+    [keyOf(unit.x, unit.y), `unit:${unit.id}`],
+    [keyOf(blockedAhead.x, blockedAhead.y), `unit:${blockedAhead.id}`],
+  ]);
+
+  const step = getMoveStepToward(initial.grid, unit, { x: 10.5, y: 16.5 }, occupied, 'VERTICAL', -1);
+
+  assertDeepEqual(step ?? {}, { x: 9, y: 23 }, 'Blocked same-column pathing should respect the orbit side rather than always drifting right.');
 });
 
 runTest('archer tower damages enemies in range during battle', () => {
