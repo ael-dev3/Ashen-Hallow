@@ -1,5 +1,13 @@
 # Ashen-Hallow Roadmap
 
+## v0.0.09 - Human round-scaling combat correctness
+
+Delivered in this phase:
+
+- fixed human kill-blow round damage so stored `roundDamageBonusPct` affects later attacks for non-aura units
+- added a regression proving a +1% Archer kill-blow bonus turns 4.00 damage into lethal 4.04 follow-up damage
+- kept the damage-bonus helper compatible with Orc pack bonuses by separating ally aura scaling from generic round scaling
+
 ## v0.0.08 - Pathfinding and current-version UX polish
 
 Delivered in this phase:

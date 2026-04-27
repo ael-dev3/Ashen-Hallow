@@ -877,6 +877,53 @@ runTest('human units gain 1% round damage per killing blow', () => {
   assertEqual(buffedArcher?.roundDamageBonusPct ?? 0, 0.01, 'A human unit should gain 1% round damage per killing blow.');
 });
 
+runTest('human round damage bonus affects later attacks', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const archer = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'ARCHER', x: 10, y: 10 }),
+    attackCooldownMs: 0,
+    moveCooldownMs: 999,
+  };
+  const doomedGoblin = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'GOBLIN', x: 10, y: 12 }),
+    hp: 1,
+    maxHp: 1,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const firstStep = stepBattle({
+    grid: initial.grid,
+    units: [archer, doomedGoblin],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const buffedArcher = firstStep.units.find(unit => unit.id === archer.id);
+  assertOk(!!buffedArcher, 'The archer should survive after earning a kill.');
+  assertEqual(buffedArcher?.roundDamageBonusPct ?? 0, 0.01, 'The archer should carry +1% round damage into later attacks.');
+
+  const fragileTarget = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'ARCHER', x: 10, y: 12 }),
+    hp: 4.02,
+    maxHp: 8,
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+
+  const secondStep = stepBattle({
+    grid: initial.grid,
+    units: [buffedArcher!, fragileTarget],
+    buildings: [],
+    deltaMs: 750,
+  });
+
+  assertOk(
+    !secondStep.units.some(unit => unit.id === fragileTarget.id),
+    'With +1% round damage, the archer should deal 4.04 damage and kill a 4.02 HP target.'
+  );
+});
+
 runTest('archer gains one additional in-range target per kill for the rest of the round', () => {
   const initial = createInitialGameState('HUMAN', 'ORC');
   const archer = {

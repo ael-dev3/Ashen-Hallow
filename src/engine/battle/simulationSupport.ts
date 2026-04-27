@@ -57,17 +57,19 @@ export const getUnitAttackDamage = (unit: UnitState, allies: readonly UnitState[
   const baseDamage = getUnitStats(unit.type, unit.tier).attackDamage * (unit.statMultiplier ?? 1);
   const bonusRadius = blueprint.allyDamageBonusRadius ?? 0;
   const bonusPerUnit = blueprint.allyDamageBonusPerUnit ?? 0;
-  if (bonusRadius <= 0 || bonusPerUnit <= 0) return baseDamage;
+  let allyDamageMultiplier = 1;
 
-  const unitCenter = getUnitCenter(unit);
-  const nearbyAllies = allies.filter(ally => {
-    if (ally.id === unit.id) return false;
-    const samePack = isGoblinPackUnitType(unit.type) && isGoblinPackUnitType(ally.type);
-    return (samePack || ally.type === unit.type) && chebyshev(unitCenter, getUnitCenter(ally)) <= bonusRadius;
-  }).length;
+  if (bonusRadius > 0 && bonusPerUnit > 0) {
+    const unitCenter = getUnitCenter(unit);
+    const nearbyAllies = allies.filter(ally => {
+      if (ally.id === unit.id) return false;
+      const samePack = isGoblinPackUnitType(unit.type) && isGoblinPackUnitType(ally.type);
+      return (samePack || ally.type === unit.type) && chebyshev(unitCenter, getUnitCenter(ally)) <= bonusRadius;
+    }).length;
+    allyDamageMultiplier += nearbyAllies * bonusPerUnit;
+  }
 
-  const packDamage = baseDamage * (1 + nearbyAllies * bonusPerUnit);
-  return packDamage * (1 + (unit.roundDamageBonusPct ?? 0));
+  return baseDamage * allyDamageMultiplier * (1 + (unit.roundDamageBonusPct ?? 0));
 };
 
 export const getUnitMaxHpMultiplier = (unit: UnitState, allies: readonly UnitState[]): number => {
