@@ -594,12 +594,10 @@ export const stepBattle = (params: {
   const movedUnits = unitsAfterSpawns.map(u => {
     const winner = winners.get(u.id);
     if (!winner) return u;
-    const enemyOilFieldsAfterSpawns = getOilFieldsForTeam(unitsAfterSpawns, u.team === 'PLAYER' ? 'ENEMY' : 'PLAYER');
     const movedUnit = { ...u, x: winner.toX, y: winner.toY };
-    const moveSlowMultiplier = getMoveSlowMultiplier(movedUnit, enemyOilFieldsAfterSpawns);
     return {
       ...movedUnit,
-      moveCooldownMs: getUnitMoveCooldownMs(u.type) / moveSlowMultiplier,
+      moveCooldownMs: getUnitMoveCooldownMs(u.type),
     };
   });
 

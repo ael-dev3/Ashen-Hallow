@@ -1,6 +1,6 @@
 # Ashen-Hallow Architecture
 
-Ashen-Hallow is a browser-based TypeScript autobattler. v0.0.09 keeps the v0.0.07 production module spine and v0.0.08 movement/input polish stable while tightening combat damage-bonus correctness for human round scaling.
+Ashen-Hallow is a browser-based TypeScript autobattler. v0.0.10 keeps the v0.0.07 production module spine and recent movement/input polish stable while tightening oil-field movement timing so terrain slows are applied predictably.
 
 ## Architecture goals
 
@@ -90,7 +90,7 @@ The current DOM UI remains intentionally lightweight and dependency-free:
 - `screens/game/gameText.ts` — tooltip/stat copy and formatting helpers
 - `atoms` — button and tooltip primitives
 
-v0.0.09 keeps the debug monitor collapsed by default for a cleaner player-facing screen while retaining expand-on-demand diagnostics for QA, and keeps combat bonus math covered by deterministic regression scenarios.
+v0.0.10 keeps the debug monitor collapsed by default for a cleaner player-facing screen while retaining expand-on-demand diagnostics for QA, and keeps combat movement timing covered by deterministic regression scenarios.
 
 ## Public compatibility facades
 

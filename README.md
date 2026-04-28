@@ -3,7 +3,7 @@
 Ashen-Hallow is a browser-based fantasy autobattler built with TypeScript and deployed on GitHub Pages. It started as a focused standalone rebuild of an earlier prototype and is now being hardened into a more professional, expandable strategy game with stronger combat identity, clearer faction mechanics, and a better long-term architecture plan.
 
 **Live game:** https://ael-dev3.github.io/Ashen-Hallow/  
-**Current version:** `v0.0.09`
+**Current version:** `v0.0.10`
 
 ## Overview
 
@@ -17,6 +17,12 @@ Ashen-Hallow is built around a fast preparation-and-resolution loop:
 - outlast the opposing warhost before your side collapses
 
 The current playable foundation now has a clearer TypeScript module spine: domain types, catalog facades, AI planning, battle support helpers, reducer orchestration, rendering viewport state, input interaction mapping, and audio service wiring are separated into focused modules while existing gameplay entry points remain stable.
+
+## v0.0.10 highlights
+
+- Fixed oil-field movement slow so units pay one intended slowed cooldown instead of compounding the slow twice
+- Added a regression proving an oil-slowed Goblin can move again after one slowed cooldown window
+- Kept existing Archer oil flask behavior and pathing polish while making movement debuffs feel less sticky and more readable
 
 ## v0.0.09 highlights
 
@@ -112,7 +118,7 @@ Ashen-Hallow is aiming for a distinct blood-lit sacred-horror battlefield rather
 
 ## Technical direction
 
-The current codebase is stable and playable. v0.0.09 keeps the modular TypeScript spine from v0.0.07 and the v0.0.08 pathfinding/input polish while tightening combat correctness around human round-scaling bonuses. Short-term engineering priorities are:
+The current codebase is stable and playable. v0.0.10 keeps the modular TypeScript spine from v0.0.07 and the recent pathfinding/combat polish while tightening oil-field movement timing so slows are applied once instead of compounded. Short-term engineering priorities are:
 
 - break oversized simulation and UI files into smaller systems
 - move toward more data-driven ability definitions

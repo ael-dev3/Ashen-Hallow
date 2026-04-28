@@ -6,7 +6,7 @@ import { isPlayerDeployableCell } from '../src/engine/game/grid';
 import { createInitialGameState } from '../src/engine/game/initialState';
 import { gameReducer } from '../src/engine/game/reducer';
 import { stepBattle } from '../src/engine/game/simulateBattle';
-import { createUnit, getUnitBlueprint } from '../src/engine/game/unitCatalog';
+import { createUnit, getUnitBlueprint, getUnitMoveCooldownMs } from '../src/engine/game/unitCatalog';
 import { xpRequiredForTier } from '../src/engine/game/xp';
 import { getUpgradeAllSummary } from '../src/engine/game/upgrades';
 import { getMoveStepToward, keyOf } from '../src/engine/battle/simulationSupport';
@@ -1097,7 +1097,71 @@ runTest('archer drops an oil flask the first time an enemy enters range and slow
 
   const slowedGoblin = secondStep.units.find(unit => unit.id === enemyGoblin.id);
   assertOk(!!slowedGoblin, 'The goblin should survive the oil-slow setup.');
-  assertOk((slowedGoblin?.moveCooldownMs ?? 0) > 93, 'Units moving through the oil field should receive a stronger movement cooldown.');
+  assertOk((slowedGoblin?.moveCooldownMs ?? 0) > 0, 'Units moving through the oil field should receive a movement cooldown.');
+});
+
+runTest('oil field slow delays movement once instead of multiplying twice', () => {
+  const initial = createInitialGameState('HUMAN', 'ORC');
+  const archer = {
+    ...createUnit({ id: 1, team: 'PLAYER', type: 'ARCHER', x: 10, y: 10 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyKnight = {
+    ...createUnit({ id: 2, team: 'ENEMY', type: 'KNIGHT', x: 10, y: 13 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 999,
+  };
+  const enemyGoblin = {
+    ...createUnit({ id: 3, team: 'ENEMY', type: 'GOBLIN', x: 10, y: 14 }),
+    attackCooldownMs: 999,
+    moveCooldownMs: 0,
+  };
+
+  const firstStep = stepBattle({
+    grid: initial.grid,
+    units: [archer, enemyKnight, enemyGoblin],
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const movedInOilStep = stepBattle({
+    grid: initial.grid,
+    units: firstStep.units.map(unit => (unit.id === enemyGoblin.id ? { ...unit, moveCooldownMs: 0 } : unit)),
+    buildings: [],
+    deltaMs: 100,
+  });
+
+  const movedGoblin = movedInOilStep.units.find(unit => unit.id === enemyGoblin.id);
+  assertOk(!!movedGoblin, 'Goblin should survive the oil movement setup.');
+  const baseCooldownMs = getUnitMoveCooldownMs('GOBLIN');
+  const slowedCooldownMs = baseCooldownMs / 0.4;
+
+  const afterBaseCooldown = stepBattle({
+    grid: initial.grid,
+    units: movedInOilStep.units,
+    buildings: [],
+    deltaMs: baseCooldownMs,
+  });
+
+  const baseCooldownGoblin = afterBaseCooldown.units.find(unit => unit.id === enemyGoblin.id);
+  assertOk(!!baseCooldownGoblin, 'Goblin should survive the base cooldown step.');
+  assertEqual(baseCooldownGoblin?.x ?? -1, movedGoblin?.x ?? -2, 'Oil should prevent a move after only the base cooldown.');
+  assertEqual(baseCooldownGoblin?.y ?? -1, movedGoblin?.y ?? -2, 'Oil should keep the goblin in place after only the base cooldown.');
+
+  const afterOneSlowedCooldown = stepBattle({
+    grid: initial.grid,
+    units: movedInOilStep.units,
+    buildings: [],
+    deltaMs: slowedCooldownMs,
+  });
+
+  const nextGoblin = afterOneSlowedCooldown.units.find(unit => unit.id === enemyGoblin.id);
+  assertOk(!!nextGoblin, 'Goblin should survive the elapsed oil cooldown step.');
+  assertOk(
+    nextGoblin?.x !== movedGoblin?.x || nextGoblin?.y !== movedGoblin?.y,
+    `Goblin should move after one slowed cooldown, got cooldown ${nextGoblin?.moveCooldownMs ?? 'missing'}.`
+  );
 });
 
 runTest('golem death spawns a goblin squad around its death location', () => {

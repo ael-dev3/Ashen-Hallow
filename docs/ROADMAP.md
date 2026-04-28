@@ -1,5 +1,13 @@
 # Ashen-Hallow Roadmap
 
+## v0.0.10 - Oil-field movement timing polish
+
+Delivered in this phase:
+
+- fixed Archer oil-field slow so movement delay is applied in one place instead of being multiplied once on cooldown assignment and again on cooldown decay
+- added a regression proving a Goblin inside oil moves after one slowed cooldown instead of waiting through an accidental double slow
+- kept oil fields as readable pathing-control terrain while reducing sticky-feeling movement debuffs
+
 ## v0.0.09 - Human round-scaling combat correctness
 
 Delivered in this phase:
